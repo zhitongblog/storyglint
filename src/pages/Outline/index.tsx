@@ -602,7 +602,6 @@ function Outline() {
     }
 
     const existingChapters = chapters.filter((c) => c.volumeId === volumeId)
-    const chapterNumber = chaptersBeforeCurrentVolume + existingChapters.length + 1
 
     await createChapter({
       volumeId,
