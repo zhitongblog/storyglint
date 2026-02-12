@@ -674,6 +674,9 @@ export async function autoWriteAll(
     const chapter = chaptersToWrite[i]
     const nextChapter = chaptersToWrite[i + 1]
 
+    // 🔥 计算全局章节编号（而不是局部索引）
+    const globalChapterNumber = startIndex + i + 1
+
     // 跳过已有内容的章节
     if (chapter.content && chapter.content.trim().length > 500) {
       previousContent = chapter.content
@@ -681,8 +684,8 @@ export async function autoWriteAll(
       completed++
       totalWords += chapter.content.length
       onProgress({
-        currentChapter: i + 1,
-        totalChapters,
+        currentChapter: globalChapterNumber,  // 🔥 使用全局编号
+        totalChapters: sortedChapters.length,  // 🔥 总章节数是全书的，不是待写的
         chapterTitle: chapter.title,
         status: 'complete'
       })
@@ -692,8 +695,8 @@ export async function autoWriteAll(
     // 检查大纲
     if (!chapter.outline || chapter.outline.trim().length < 10) {
       onProgress({
-        currentChapter: i + 1,
-        totalChapters,
+        currentChapter: globalChapterNumber,  // 🔥 使用全局编号
+        totalChapters: sortedChapters.length,  // 🔥 使用全书总数
         chapterTitle: chapter.title,
         status: 'error',
         error: '缺少大纲'
@@ -736,8 +739,8 @@ export async function autoWriteAll(
     }
 
     onProgress({
-      currentChapter: i + 1,
-      totalChapters,
+      currentChapter: globalChapterNumber,  // 🔥 使用全局编号
+      totalChapters: sortedChapters.length,  // 🔥 使用全书总数
       chapterTitle: chapter.title,
       status: 'writing'
     })
@@ -756,8 +759,8 @@ export async function autoWriteAll(
       )
 
       onProgress({
-        currentChapter: i + 1,
-        totalChapters,
+        currentChapter: globalChapterNumber,  // 🔥 使用全局编号
+        totalChapters: sortedChapters.length,  // 🔥 使用全书总数
         chapterTitle: chapter.title,
         status: 'saving'
       })
@@ -774,8 +777,8 @@ export async function autoWriteAll(
       console.error(`Failed to write chapter ${chapter.title}:`, error)
       failed++
       onProgress({
-        currentChapter: i + 1,
-        totalChapters,
+        currentChapter: globalChapterNumber,  // 🔥 使用全局编号
+        totalChapters: sortedChapters.length,  // 🔥 使用全书总数
         chapterTitle: chapter.title,
         status: 'error',
         error: error.message
