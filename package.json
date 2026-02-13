@@ -16,7 +16,10 @@
     "electron:dev": "concurrently \"vite\" \"electron .\"",
     "typecheck": "tsc --noEmit"
   },
-  "author": "NovaScribe Team",
+  "author": {
+    "name": "NovaScribe Team",
+    "email": "novascribe@example.com"
+  },
   "license": "MIT",
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
