@@ -273,7 +273,8 @@ function Editor() {
       const volume = volumes.find((v) => v.id === volumeId)
       if (volume) {
         setCurrentVolume(volume)
-        await loadChapters(volumeId)
+        // 不再调用 loadChapters，因为 loadAllChapters 已经加载了所有卷的章节
+        // 避免覆盖其他卷的章节数据
       }
     } else if (key.startsWith('chapter-')) {
       const chapterId = key.replace('chapter-', '')
@@ -548,6 +549,9 @@ function Editor() {
       return
     }
 
+    // 🔍 调试：打印卷信息
+    console.log('📚 [AutoWrite] 卷列表:', volumes.map(v => ({ id: v.id.slice(0, 8), title: v.title, order: v.order })))
+
     // 按顺序排序章节（从第一章开始）- 使用卷的order字段而不是volumeId字符串比较
     const sortedChapters = [...chapters].sort((a, b) => {
       const volA = volumes.find(v => v.id === a.volumeId)
@@ -559,6 +563,19 @@ function Editor() {
       // 再按章节order排序
       return a.order - b.order
     })
+
+    // 🔍 调试：打印排序后的章节
+    console.log('📖 [AutoWrite] 排序后章节:', sortedChapters.map((c, i) => {
+      const vol = volumes.find(v => v.id === c.volumeId)
+      return {
+        globalIndex: i + 1,
+        volTitle: vol?.title,
+        volOrder: vol?.order,
+        chapterTitle: c.title,
+        chapterOrder: c.order,
+        hasContent: c.content && c.content.trim().length > 500
+      }
+    }))
 
     // 计算待写章节数和找到第一个未写的章节
     const unwrittenChapters = sortedChapters.filter(
@@ -572,6 +589,15 @@ function Editor() {
 
     // 自动从第一个未写的章节开始
     const startChapter = unwrittenChapters[0]
+
+    // 🔍 调试：打印起始章节信息
+    const startVol = volumes.find(v => v.id === startChapter.volumeId)
+    console.log('🎯 [AutoWrite] 起始章节:', {
+      volTitle: startVol?.title,
+      volOrder: startVol?.order,
+      chapterTitle: startChapter.title,
+      chapterOrder: startChapter.order
+    })
     const startChapterIndex = sortedChapters.findIndex(c => c.id === startChapter.id)
     const startChapterNumber = startChapterIndex + 1
 
