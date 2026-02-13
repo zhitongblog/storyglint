@@ -1,6 +1,6 @@
 {
   "name": "novascribe",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "智能网文创作 Windows 桌面客户端",
   "main": "dist-electron/main.js",
   "scripts": {

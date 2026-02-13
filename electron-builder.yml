@@ -60,10 +60,9 @@ mac:
   category: public.app-category.productivity
   icon: assets/icon.icns
   artifactName: ${productName}-${version}-Mac-${arch}.${ext}
-  hardenedRuntime: true
+  # 未签名应用需要禁用这些选项
+  hardenedRuntime: false
   gatekeeperAssess: false
-  entitlements: assets/entitlements.mac.plist
-  entitlementsInherit: assets/entitlements.mac.plist
   # 不签名（如果没有开发者证书）
   identity: null
 
