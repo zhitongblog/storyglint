@@ -32,7 +32,6 @@ win:
     - target: nsis
       arch:
         - x64
-  artifactName: ${productName}-${version}-Win-x64.${ext}
   icon: assets/icon.ico
   sign: false
   signAndEditExecutable: false
@@ -49,6 +48,7 @@ nsis:
   license: LICENSE
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
+  artifactName: ${productName}-Setup-${version}.${ext}
 
 # macOS 配置
 mac:
