@@ -11,6 +11,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false  # 让各平台独立构建，一个失败不影响其他
       matrix:
         include:
           - os: windows-latest
