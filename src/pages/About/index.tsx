@@ -10,7 +10,7 @@ import {
 const { Title, Text, Paragraph, Link } = Typography
 
 // 从 package.json 获取版本号
-const APP_VERSION = '1.0.7'
+const APP_VERSION = '1.0.8'
 
 function About() {
   const handleCopyEmail = () => {
