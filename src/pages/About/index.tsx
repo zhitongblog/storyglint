@@ -19,7 +19,7 @@ function About() {
   }
 
   const openExternal = (url: string) => {
-    window.electron?.shell?.openExternal(url)
+    window.electron?.system?.openExternal(url)
   }
 
   return (

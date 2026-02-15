@@ -7,8 +7,7 @@ import {
   MenuOutlined,
   FontSizeOutlined,
   FullscreenOutlined,
-  FullscreenExitOutlined,
-  HomeOutlined
+  FullscreenExitOutlined
 } from '@ant-design/icons'
 import type { Chapter, Volume } from '../../types'
 
