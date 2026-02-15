@@ -29,10 +29,12 @@ import {
   CheckCircleOutlined,
   DownloadOutlined,
   ExportOutlined,
-  ClearOutlined
+  ClearOutlined,
+  ReadOutlined
 } from '@ant-design/icons'
 import type { DataNode } from 'antd/es/tree'
 import RichEditor from '../../components/RichEditor'
+import ReadingMode from '../../components/ReadingMode'
 import { useProjectStore } from '../../stores/project'
 import { useEditorStore } from '../../stores/editor'
 import { isGeminiReady, initGemini, analyzeAllChaptersForArchive, analyzeChapterForDeaths } from '../../services/gemini'
@@ -104,6 +106,9 @@ function Editor() {
   // 写本章约束条件
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false)
   const [writeConstraints, setWriteConstraints] = useState('')
+
+  // 阅读模式
+  const [isReadingMode, setIsReadingMode] = useState(false)
 
   // 加载项目数据
   useEffect(() => {
@@ -235,6 +240,15 @@ function Editor() {
               <Dropdown
                 menu={{
                   items: [
+                    {
+                      key: 'read',
+                      icon: <ReadOutlined />,
+                      label: '阅读模式',
+                      onClick: () => {
+                        setCurrentChapter(chapter)
+                        setIsReadingMode(true)
+                      }
+                    },
                     {
                       key: 'copy',
                       icon: <CopyOutlined />,
@@ -1011,6 +1025,16 @@ function Editor() {
                 导出全书
               </Button>
             </Tooltip>
+
+            <Tooltip title="进入阅读模式（以读者视角查看）">
+              <Button
+                icon={<ReadOutlined />}
+                onClick={() => setIsReadingMode(true)}
+                disabled={!currentChapter}
+              >
+                阅读
+              </Button>
+            </Tooltip>
           </Space>
         </div>
 
@@ -1100,6 +1124,16 @@ function Editor() {
           />
         </div>
       </Modal>
+
+      {/* 阅读模式 */}
+      <ReadingMode
+        visible={isReadingMode}
+        onClose={() => setIsReadingMode(false)}
+        currentChapter={currentChapter}
+        chapters={chapters}
+        volumes={volumes}
+        onChapterChange={(chapter) => setCurrentChapter(chapter)}
+      />
 
     </Layout>
   )
