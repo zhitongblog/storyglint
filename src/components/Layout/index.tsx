@@ -14,7 +14,8 @@ import {
   LogoutOutlined,
   LoginOutlined,
   AppstoreOutlined,
-  CrownOutlined
+  CrownOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons'
 import { useProjectStore } from '../../stores/project'
 import type { MenuProps } from 'antd'
@@ -108,6 +109,11 @@ function Layout() {
       key: '/settings',
       icon: <SettingOutlined />,
       label: '全局设置'
+    },
+    {
+      key: '/about',
+      icon: <InfoCircleOutlined />,
+      label: '关于'
     },
     // 仅管理员显示管理后台入口
     ...(serverUser?.role === 'admin'

@@ -10,6 +10,7 @@ import Cover from '../pages/Cover'
 import ProjectList from '../pages/ProjectList'
 import GlobalSettings from '../pages/GlobalSettings'
 import Admin from '../pages/Admin'
+import About from '../pages/About'
 
 const router = createHashRouter([
   {
@@ -35,6 +36,10 @@ const router = createHashRouter([
       {
         path: 'admin',
         element: <Admin />
+      },
+      {
+        path: 'about',
+        element: <About />
       },
       {
         path: 'project/:projectId',
