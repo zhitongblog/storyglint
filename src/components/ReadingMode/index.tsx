@@ -151,7 +151,8 @@ function ReadingMode({
   }, [getSortedChapters, getCurrentIndex, onChapterChange])
 
   // 退出阅读模式 - 直接调用 onClose
-  const handleClose = useCallback((e?: React.MouseEvent) => {
+  const handleClose = useCallback((e?: React.MouseEvent | KeyboardEvent) => {
+    console.log('[ReadingMode] handleClose called')
     // 阻止事件冒泡，防止触发其他事件
     if (e) {
       e.preventDefault()
@@ -161,10 +162,9 @@ function ReadingMode({
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {})
     }
-    // 调用 onClose，使用 setTimeout 确保不会与其他事件冲突
-    setTimeout(() => {
-      onClose()
-    }, 0)
+    // 直接调用 onClose
+    console.log('[ReadingMode] calling onClose')
+    onClose()
   }, [onClose])
 
   // 键盘快捷键
@@ -188,10 +188,8 @@ function ReadingMode({
       } else if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
-        // 用 setTimeout 确保事件处理完成后再关闭
-        setTimeout(() => {
-          handleClose()
-        }, 0)
+        console.log('[ReadingMode] Escape key pressed')
+        handleClose(e)
       }
     }
 
@@ -284,6 +282,16 @@ function ReadingMode({
         background: currentTheme.bg
       }}
     >
+      {/* 标题栏占位区域 - 允许拖拽窗口，保留系统按钮空间 */}
+      <div
+        className="titlebar-drag"
+        style={{
+          height: '40px',
+          background: toolbarBg,
+          flexShrink: 0
+        }}
+      />
+
       {/* 顶部工具栏 */}
       <div
         style={{
@@ -297,12 +305,33 @@ function ReadingMode({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <Tooltip title="退出阅读模式 (Esc)">
-            <Button
-              type="text"
-              icon={<CloseOutlined />}
-              onClick={(e) => handleClose(e)}
-              style={{ color: toolbarText }}
-            />
+            <div
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                console.log('[ReadingMode] Close button clicked')
+                handleClose(e)
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                color: toolbarText,
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+              }}
+            >
+              <CloseOutlined />
+            </div>
           </Tooltip>
           <Tooltip title="章节目录">
             <Button

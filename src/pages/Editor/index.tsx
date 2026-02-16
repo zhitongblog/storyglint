@@ -1131,7 +1131,10 @@ function Editor() {
     {/* 阅读模式 - 放在 Layout 外面确保正确覆盖 */}
     <ReadingMode
       visible={isReadingMode}
-      onClose={() => setIsReadingMode(false)}
+      onClose={() => {
+        console.log('[Editor] ReadingMode onClose called, setting isReadingMode to false')
+        setIsReadingMode(false)
+      }}
       currentChapter={currentChapter}
       chapters={chapters}
       volumes={volumes}
