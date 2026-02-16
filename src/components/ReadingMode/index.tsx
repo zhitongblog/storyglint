@@ -151,13 +151,20 @@ function ReadingMode({
   }, [getSortedChapters, getCurrentIndex, onChapterChange])
 
   // 退出阅读模式 - 直接调用 onClose
-  const handleClose = useCallback(() => {
+  const handleClose = useCallback((e?: React.MouseEvent) => {
+    // 阻止事件冒泡，防止触发其他事件
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     // 如果是全屏模式，先退出全屏
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {})
     }
-    // 直接调用 onClose
-    onClose()
+    // 调用 onClose，使用 setTimeout 确保不会与其他事件冲突
+    setTimeout(() => {
+      onClose()
+    }, 0)
   }, [onClose])
 
   // 键盘快捷键
@@ -172,14 +179,19 @@ function ReadingMode({
 
       if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault()
+        e.stopPropagation()
         handlePrevChapter()
       } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
         e.preventDefault()
+        e.stopPropagation()
         handleNextChapter()
       } else if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
-        handleClose()
+        // 用 setTimeout 确保事件处理完成后再关闭
+        setTimeout(() => {
+          handleClose()
+        }, 0)
       }
     }
 
@@ -288,7 +300,7 @@ function ReadingMode({
             <Button
               type="text"
               icon={<CloseOutlined />}
-              onClick={handleClose}
+              onClick={(e) => handleClose(e)}
               style={{ color: toolbarText }}
             />
           </Tooltip>

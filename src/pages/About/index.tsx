@@ -7,6 +7,9 @@ import {
   CopyOutlined
 } from '@ant-design/icons'
 
+// 导入本地微信收款码图片
+import weipayImage from '../../../demo/weipay.jpg'
+
 const { Title, Text, Paragraph, Link } = Typography
 
 // 从 package.json 获取版本号
@@ -141,18 +144,14 @@ function About() {
               }}
             >
               <img
-                src="https://storyglint.com/weipay.jpg"
+                src={weipayImage}
                 alt="微信支付"
                 style={{
                   display: 'block',
                   width: '280px',
                   height: '280px',
                   borderRadius: '8px',
-                  objectFit: 'cover'
-                }}
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement
-                  target.style.display = 'none'
+                  objectFit: 'contain'
                 }}
               />
               <div style={{
