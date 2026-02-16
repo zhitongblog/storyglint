@@ -45,25 +45,36 @@ const FONT_OPTIONS = [
   { value: 'fangsong', label: '仿宋', font: '"FangSong", "仿宋", serif' }
 ]
 
-// 将HTML内容转换为纯文本并保持段落格式
-function htmlToReadableText(html: string): string {
-  if (!html) return ''
+// 将HTML内容转换为段落数组
+function htmlToParagraphs(html: string): string[] {
+  if (!html) return []
 
-  let text = html
-    .replace(/<p[^>]*>/gi, '')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .trim()
+  // 先用 </p> 分割
+  let parts = html.split(/<\/p>/gi)
 
-  text = text.replace(/\n{3,}/g, '\n\n')
+  // 如果只有一个部分，尝试用 <br> 分割
+  if (parts.length <= 1) {
+    parts = html.split(/<br\s*\/?>/gi)
+  }
 
-  return text
+  // 如果还是只有一个部分，尝试用换行符分割
+  if (parts.length <= 1) {
+    parts = html.split(/\n/)
+  }
+
+  // 清理每个段落的 HTML 标签和实体
+  const cleanedParts = parts.map(part => {
+    return part
+      .replace(/<[^>]+>/g, '') // 移除所有 HTML 标签
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .trim()
+  }).filter(p => p.length > 0) // 过滤空段落
+
+  return cleanedParts
 }
 
 function ReadingMode({
@@ -254,8 +265,8 @@ function ReadingMode({
   // 如果不可见或没有章节，不渲染
   if (!visible || !currentChapter) return null
 
-  const content = htmlToReadableText(currentChapter.content || '')
-  const paragraphs = content.split('\n\n').filter(p => p.trim())
+  const paragraphs = htmlToParagraphs(currentChapter.content || '')
+  const content = paragraphs.join('\n\n') // 用于检查是否有内容
 
   // 双栏模式：屏幕宽度 >= 1200px 时可用
   const canUseDualPage = windowWidth >= 1200
@@ -273,7 +284,8 @@ function ReadingMode({
     paragraphsCount: paragraphs.length,
     splitIndex,
     leftCount: leftParagraphs.length,
-    rightCount: rightParagraphs.length
+    rightCount: rightParagraphs.length,
+    rawContentPreview: currentChapter.content?.substring(0, 200) // 显示原始内容前200字符
   })
 
   // 工具栏背景色（根据主题调整）
