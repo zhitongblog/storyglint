@@ -260,41 +260,10 @@ function ReadingMode({
   // 双栏模式：屏幕宽度 >= 1200px 时可用
   const canUseDualPage = windowWidth >= 1200
 
-  // 双栏模式下，根据字数平均分配段落到两栏
-  const splitParagraphsForDualColumn = () => {
-    if (!dualPage || !canUseDualPage || paragraphs.length === 0) {
-      return { left: paragraphs, right: [] }
-    }
-
-    // 计算每个段落的字数
-    const paragraphLengths = paragraphs.map(p => p.length)
-    const totalLength = paragraphLengths.reduce((a, b) => a + b, 0)
-    const halfLength = totalLength / 2
-
-    // 找到最接近一半字数的分割点
-    let currentLength = 0
-    let splitIndex = 0
-    for (let i = 0; i < paragraphs.length; i++) {
-      currentLength += paragraphLengths[i]
-      if (currentLength >= halfLength) {
-        // 判断是在这里分割还是前一个位置更接近一半
-        const beforeDiff = Math.abs(halfLength - (currentLength - paragraphLengths[i]))
-        const afterDiff = Math.abs(halfLength - currentLength)
-        splitIndex = beforeDiff < afterDiff ? i : i + 1
-        break
-      }
-    }
-
-    // 确保至少有一个段落在左边
-    splitIndex = Math.max(1, Math.min(splitIndex, paragraphs.length - 1))
-
-    return {
-      left: paragraphs.slice(0, splitIndex),
-      right: paragraphs.slice(splitIndex)
-    }
-  }
-
-  const { left: leftParagraphs, right: rightParagraphs } = splitParagraphsForDualColumn()
+  // 双栏模式下，简单地将段落平分到两栏
+  const splitIndex = Math.ceil(paragraphs.length / 2)
+  const leftParagraphs = dualPage && canUseDualPage ? paragraphs.slice(0, splitIndex) : paragraphs
+  const rightParagraphs = dualPage && canUseDualPage ? paragraphs.slice(splitIndex) : []
 
   // 调试日志
   console.log('[ReadingMode] 双栏模式状态:', {
@@ -302,6 +271,7 @@ function ReadingMode({
     canUseDualPage,
     windowWidth,
     paragraphsCount: paragraphs.length,
+    splitIndex,
     leftCount: leftParagraphs.length,
     rightCount: rightParagraphs.length
   })
