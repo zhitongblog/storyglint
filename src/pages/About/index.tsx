@@ -129,25 +129,41 @@ function About() {
               欢迎请作者喝杯咖啡，您的支持是我持续更新的动力！
             </Paragraph>
 
-            <div className="mt-6 p-4 bg-white rounded-lg shadow-lg" style={{ display: 'inline-block', maxWidth: 'none' }}>
+            {/* 使用独立的样式避免被 Ant Design 覆盖 */}
+            <div
+              style={{
+                display: 'inline-block',
+                padding: '16px',
+                background: '#ffffff',
+                borderRadius: '12px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                marginTop: '24px'
+              }}
+            >
               <img
                 src="https://storyglint.com/weipay.jpg"
                 alt="微信支付"
-                className="rounded-lg"
                 style={{
                   display: 'block',
-                  width: '300px',
-                  height: 'auto',
-                  maxWidth: 'none',
-                  objectFit: 'contain'
+                  width: '280px',
+                  height: '280px',
+                  borderRadius: '8px',
+                  objectFit: 'cover'
                 }}
                 onError={(e) => {
-                  // 如果在线图片加载失败，显示提示
                   const target = e.target as HTMLImageElement
                   target.style.display = 'none'
                 }}
               />
-              <div className="mt-3 text-green-600 font-semibold flex items-center justify-center gap-2">
+              <div style={{
+                marginTop: '12px',
+                color: '#07c160',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}>
                 <svg viewBox="0 0 24 24" fill="#07c160" width="20" height="20">
                   <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18z"/>
                 </svg>

@@ -220,8 +220,8 @@ function Layout() {
         className="titlebar-drag flex items-center justify-between px-4"
         style={{
           height: 40,
-          background: '#1a1a2e',
-          borderBottom: '1px solid #0f3460',
+          background: 'var(--color-bg-tertiary)',
+          borderBottom: '1px solid var(--color-border)',
           padding: '0 16px'
         }}
       >
@@ -264,8 +264,8 @@ function Layout() {
         <Sider
           width={200}
           style={{
-            background: '#16213e',
-            borderRight: '1px solid #0f3460'
+            background: 'var(--color-bg-secondary)',
+            borderRight: '1px solid var(--color-border)'
           }}
         >
           <div className="flex flex-col h-full">
@@ -348,7 +348,7 @@ function Layout() {
         {/* 主内容区 */}
         <Content
           style={{
-            background: '#0f0f1a',
+            background: 'var(--color-bg-primary)',
             overflow: 'auto'
           }}
         >

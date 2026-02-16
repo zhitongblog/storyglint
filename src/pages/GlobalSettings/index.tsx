@@ -14,7 +14,8 @@ import {
   ApiOutlined,
   UserOutlined,
   ExclamationCircleOutlined,
-  GoogleOutlined
+  GoogleOutlined,
+  BgColorsOutlined
 } from '@ant-design/icons'
 import {
   initGemini,
@@ -27,6 +28,46 @@ import {
 } from '../../services/gemini'
 import type { ServerUser } from '../../types'
 import { ErrorDisplay, parseError, type ErrorInfo } from '../../components/ErrorDisplay'
+
+// 主题选项配置
+const THEME_OPTIONS = [
+  {
+    key: 'dark-blue',
+    name: '深蓝',
+    description: '默认深色主题，适合夜间使用',
+    colors: ['#0f0f1a', '#16213e', '#0ea5e9']
+  },
+  {
+    key: 'violet',
+    name: '紫罗兰',
+    description: '优雅紫色调，富有创意氛围',
+    colors: ['#1a0a2e', '#2d1b4e', '#a855f7']
+  },
+  {
+    key: 'emerald',
+    name: '翡翠绿',
+    description: '护眼绿色调，减轻视觉疲劳',
+    colors: ['#0a1a14', '#0d2818', '#10b981']
+  },
+  {
+    key: 'rose',
+    name: '玫瑰金',
+    description: '温暖粉色调，柔和典雅',
+    colors: ['#1a0f14', '#2d1a24', '#ec4899']
+  },
+  {
+    key: 'amber',
+    name: '琥珀橙',
+    description: '温暖橙色调，充满活力',
+    colors: ['#1a140a', '#2d2310', '#f59e0b']
+  },
+  {
+    key: 'light',
+    name: '日间模式',
+    description: '明亮浅色主题，适合白天使用',
+    colors: ['#f8fafc', '#ffffff', '#3b82f6']
+  }
+]
 
 function GlobalSettings() {
   const [geminiApiKey, setGeminiApiKey] = useState('')
@@ -51,6 +92,9 @@ function GlobalSettings() {
 
   // 错误显示状态
   const [geminiError, setGeminiError] = useState<ErrorInfo | null>(null)
+
+  // 主题配置
+  const [currentTheme, setCurrentTheme] = useState('dark-blue')
 
   // 服务端配置
   const [serverUrl, setServerUrl] = useState('https://storyglint.com')
@@ -104,6 +148,16 @@ function GlobalSettings() {
         }
         if (characterIntervalValue) {
           setCharacterInterval(characterIntervalValue as number)
+        }
+
+        // 加载主题配置
+        const savedTheme = await window.electron.settings.get('appTheme')
+        if (savedTheme) {
+          setCurrentTheme(savedTheme as string)
+          document.documentElement.setAttribute('data-theme', savedTheme as string)
+        } else {
+          // 默认主题
+          document.documentElement.setAttribute('data-theme', 'dark-blue')
         }
 
         // 加载服务端配置
@@ -318,6 +372,18 @@ function GlobalSettings() {
     }
   }
 
+  // 切换主题
+  const handleThemeChange = async (themeKey: string) => {
+    try {
+      setCurrentTheme(themeKey)
+      document.documentElement.setAttribute('data-theme', themeKey)
+      await window.electron.settings.set('appTheme', themeKey)
+      message.success(`已切换到 ${THEME_OPTIONS.find(t => t.key === themeKey)?.name} 主题`)
+    } catch (error) {
+      message.error('主题切换失败')
+    }
+  }
+
   // 测试服务端连接（通过主进程）
   const handleTestConnection = async () => {
     setIsTestingConnection(true)
@@ -499,7 +565,7 @@ function GlobalSettings() {
           </Space>
         }
         className="mb-6"
-        style={{ background: '#16213e', border: '1px solid #0f3460' }}
+        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
       >
         <Alert
           message="Gemini API 用于 AI 写作功能"
@@ -655,6 +721,78 @@ function GlobalSettings() {
         </div>
       </Card>
 
+      {/* 外观主题 */}
+      <Card
+        title={
+          <Space>
+            <BgColorsOutlined className="text-purple-500" />
+            <span>外观主题</span>
+          </Space>
+        }
+        className="mb-6"
+        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
+      >
+        <Alert
+          message="个性化界面主题"
+          description="选择您喜欢的界面配色方案，切换后立即生效。"
+          type="info"
+          showIcon
+          className="mb-4"
+        />
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {THEME_OPTIONS.map(theme => (
+            <div
+              key={theme.key}
+              onClick={() => handleThemeChange(theme.key)}
+              className={`
+                p-4 rounded-lg cursor-pointer transition-all duration-200
+                border-2 hover:scale-[1.02]
+                ${currentTheme === theme.key
+                  ? 'border-purple-500 shadow-lg shadow-purple-500/20'
+                  : 'border-transparent hover:border-gray-500'
+                }
+              `}
+              style={{
+                background: theme.colors[0]
+              }}
+            >
+              {/* 颜色预览条 */}
+              <div className="flex gap-1 mb-3">
+                {theme.colors.map((color, idx) => (
+                  <div
+                    key={idx}
+                    className="h-6 flex-1 rounded"
+                    style={{ background: color }}
+                  />
+                ))}
+              </div>
+
+              {/* 主题名称 */}
+              <div className="flex items-center justify-between">
+                <span
+                  className="font-medium"
+                  style={{ color: theme.key === 'light' ? '#1e293b' : '#e8e8e8' }}
+                >
+                  {theme.name}
+                </span>
+                {currentTheme === theme.key && (
+                  <CheckCircleOutlined className="text-purple-500" />
+                )}
+              </div>
+
+              {/* 主题描述 */}
+              <div
+                className="text-xs mt-1"
+                style={{ color: theme.key === 'light' ? '#64748b' : '#9ca3af' }}
+              >
+                {theme.description}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* 服务端配置 */}
       <Card
         title={
@@ -666,7 +804,7 @@ function GlobalSettings() {
           </Space>
         }
         className="mb-6"
-        style={{ background: '#16213e', border: '1px solid #0f3460' }}
+        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
       >
         <Alert
           message="连接自建服务端"
@@ -907,7 +1045,7 @@ function GlobalSettings() {
           </Space>
         }
         className="mb-6"
-        style={{ background: '#16213e', border: '1px solid #0f3460' }}
+        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
       >
         <Alert
           message="重要提示：访问 Google 服务需要配置代理"
@@ -989,7 +1127,7 @@ function GlobalSettings() {
             <span>智能写作优化</span>
           </Space>
         }
-        style={{ background: '#16213e', border: '1px solid #0f3460' }}
+        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
       >
         <Alert
           message="Token消耗优化"
