@@ -100,6 +100,11 @@
    - 推送 tag 后，GitHub Actions 会自动构建各平台安装包
    - 自动创建 Release 并上传安装包
    - **不需要本地构建！不需要手动上传安装包！**
+   - **安装包文件名格式**（重要！下载链接必须与此匹配）：
+     - Windows: `NovaScribe.Setup.X.X.X.exe`（用点号，不是空格）
+     - macOS Intel: `NovaScribe-X.X.X.dmg`
+     - macOS ARM: `NovaScribe-X.X.X-arm64.dmg`
+     - Linux: `novascribe_X.X.X_amd64.deb`
 
 6. **部署网站**：
    ```bash
