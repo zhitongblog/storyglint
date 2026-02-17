@@ -5,6 +5,7 @@
 
 import type { AIProvider, ProviderType, QuotaInfo, ModelInfo, ProviderConfig } from './types'
 import { PROVIDER_INFO, PROVIDERS_BY_REGION } from './types'
+import type { Character } from '../../types'
 import { geminiProvider, GeminiProvider, GEMINI_MODELS } from './providers/gemini'
 import { openaiProvider, OPENAI_MODELS } from './providers/openai'
 import { claudeProvider, CLAUDE_MODELS } from './providers/claude'
@@ -161,15 +162,17 @@ export async function findAvailableModel() {
 
 /**
  * 生成封面图片（仅 Gemini 支持）
+ * @param characters 要展示在封面上的角色列表
  */
 export async function generateCoverImage(
   bookTitle: string,
   authorName: string,
   style: string,
-  genres: string[]
+  genres: string[],
+  characters?: Character[]
 ): Promise<string> {
   const gemini = providers.gemini as GeminiProvider
-  return gemini.generateCoverImage(bookTitle, authorName, style, genres)
+  return gemini.generateCoverImage(bookTitle, authorName, style, genres, characters)
 }
 
 // ===== 高级功能（在 AI 管理器层面实现） =====

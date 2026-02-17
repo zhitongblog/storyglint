@@ -1,19 +1,40 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Input, Button, Spin, message, Select } from 'antd'
-import { PictureOutlined, DownloadOutlined, RobotOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Card, Input, Button, Spin, message, Select, Checkbox, Space, Divider } from 'antd'
+import { PictureOutlined, DownloadOutlined, RobotOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import { useProjectStore } from '../../stores/project'
 import { isGeminiReady, initGemini, generateCoverImage, getCurrentModelName } from '../../services/gemini'
+import type { Character } from '../../types'
 
+// 扩展的风格选项
 const styleOptions = [
-  { value: 'fantasy', label: '奇幻风格' },
-  { value: 'scifi', label: '科幻风格' },
-  { value: 'wuxia', label: '武侠风格' },
-  { value: 'modern', label: '现代风格' },
-  { value: 'romance', label: '言情风格' },
-  { value: 'horror', label: '恐怖风格' },
-  { value: 'historical', label: '历史风格' },
-  { value: 'anime', label: '动漫风格' }
+  // 东方风格
+  { value: 'wuxia', label: '武侠仙侠' },
+  { value: 'xuanhuan', label: '东方玄幻' },
+  { value: 'xianxia', label: '修仙飘渺' },
+  { value: 'ancient', label: '古风宫廷' },
+  { value: 'ink', label: '水墨国风' },
+  // 西方风格
+  { value: 'fantasy', label: '西方奇幻' },
+  { value: 'medieval', label: '中世纪' },
+  { value: 'gothic', label: '哥特暗黑' },
+  { value: 'steampunk', label: '蒸汽朋克' },
+  // 现代风格
+  { value: 'modern', label: '都市现代' },
+  { value: 'scifi', label: '科幻未来' },
+  { value: 'cyberpunk', label: '赛博朋克' },
+  { value: 'mecha', label: '机甲战争' },
+  // 情感风格
+  { value: 'romance', label: '浪漫唯美' },
+  { value: 'youth', label: '青春校园' },
+  { value: 'warm', label: '温馨治愈' },
+  // 其他风格
+  { value: 'horror', label: '恐怖惊悚' },
+  { value: 'mystery', label: '悬疑推理' },
+  { value: 'apocalypse', label: '末日废土' },
+  { value: 'anime', label: '日系动漫' },
+  { value: 'realistic', label: '写实油画' },
+  { value: 'comic', label: '漫画插画' }
 ]
 
 /**
@@ -129,20 +150,23 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
 function Cover() {
   const { projectId } = useParams<{ projectId: string }>()
-  const { currentProject, loadProject, updateProject } = useProjectStore()
+  const { currentProject, loadProject, updateProject, characters, loadCharacters } = useProjectStore()
 
   const [bookTitle, setBookTitle] = useState('')
   const [authorName, setAuthorName] = useState('')
-  const [style, setStyle] = useState('fantasy')
+  const [style, setStyle] = useState('xuanhuan')
   const [isGenerating, setIsGenerating] = useState(false)
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
   const [coverHistory, setCoverHistory] = useState<string[]>([])
+  // 角色选择
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([])
 
   useEffect(() => {
     if (projectId) {
       loadProject(projectId)
+      loadCharacters(projectId)
     }
-  }, [projectId, loadProject])
+  }, [projectId, loadProject, loadCharacters])
 
   // 加载项目时，同时加载作者名和封面历史
   useEffect(() => {
@@ -200,12 +224,16 @@ function Cover() {
     message.loading('AI 正在生成封面背景...', 0)
 
     try {
-      // 第一步：生成背景图
+      // 获取选中的角色信息
+      const selectedCharacters = characters.filter(c => selectedCharacterIds.includes(c.id))
+
+      // 第一步：生成背景图（包含角色）
       const backgroundUrl = await generateCoverImage(
         bookTitle,
         authorName,
         style,
-        currentProject?.genres || []
+        currentProject?.genres || [],
+        selectedCharacters
       )
 
       message.destroy()
@@ -306,10 +334,56 @@ function Cover() {
                 value={style}
                 onChange={setStyle}
                 options={styleOptions}
+                showSearch
+                optionFilterProp="label"
               />
             </div>
 
-            <div className="pt-4 space-y-3">
+            {/* 角色选择 */}
+            <div>
+              <label className="block text-dark-text mb-2">
+                <Space>
+                  <UserOutlined />
+                  <span>封面人物</span>
+                  <span className="text-dark-muted text-sm">（选择要展示的角色）</span>
+                </Space>
+              </label>
+              {characters.length === 0 ? (
+                <div className="text-dark-muted text-sm p-3 bg-dark-bg rounded">
+                  暂无角色，请先在角色管理中创建角色
+                </div>
+              ) : (
+                <div className="max-h-40 overflow-y-auto p-3 bg-dark-bg rounded space-y-2">
+                  <Checkbox.Group
+                    value={selectedCharacterIds}
+                    onChange={(values) => setSelectedCharacterIds(values as string[])}
+                    className="w-full"
+                  >
+                    <Space direction="vertical" className="w-full">
+                      {characters.slice(0, 10).map((char) => (
+                        <Checkbox key={char.id} value={char.id} className="w-full">
+                          <span className="text-dark-text">{char.name}</span>
+                          {char.role && (
+                            <span className="text-dark-muted text-xs ml-2">
+                              ({char.role === 'protagonist' ? '主角' : char.role === 'antagonist' ? '反派' : '配角'})
+                            </span>
+                          )}
+                        </Checkbox>
+                      ))}
+                    </Space>
+                  </Checkbox.Group>
+                  {selectedCharacterIds.length > 0 && (
+                    <div className="text-primary-400 text-xs mt-2">
+                      已选择 {selectedCharacterIds.length} 个角色
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <Divider className="my-2" />
+
+            <div className="space-y-3">
               <Button
                 type="primary"
                 size="large"

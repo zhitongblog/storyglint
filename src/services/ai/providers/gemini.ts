@@ -6,6 +6,7 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai'
 import type { AIProvider, ModelInfo, QuotaInfo, ProviderMeta } from '../types'
 import { PROVIDER_INFO } from '../types'
+import type { Character } from '../../../types'
 
 // Gemini 模型配置
 const GEMINI_MODELS: Record<string, ModelInfo> = {
@@ -269,7 +270,8 @@ export class GeminiProvider implements AIProvider {
     bookTitle: string,
     _authorName: string,
     style: string,
-    genres: string[]
+    genres: string[],
+    characters?: Character[]
   ): Promise<string> {
     if (!this.genAI || !this.apiKey) {
       throw new Error('Gemini API 未初始化，请先在设置中配置 API Key')
@@ -277,21 +279,59 @@ export class GeminiProvider implements AIProvider {
 
     const IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
+    // 扩展的风格描述
     const styleDescriptions: Record<string, string> = {
-      fantasy: 'epic fantasy digital painting, magical glowing elements, mystical purple and blue atmosphere',
-      scifi: 'sci-fi cyberpunk style, neon lights, holographic elements, dark blue and cyan colors',
-      wuxia: 'Chinese wuxia ink painting style, misty mountains, clouds, warrior silhouette',
-      modern: 'modern minimalist urban style, clean design, warm sunset colors, city skyline',
-      romance: 'romantic dreamy style, warm golden and pink colors, floral elements, bokeh lights',
-      horror: 'dark gothic horror style, deep shadows, red and black atmosphere, fog',
-      historical: 'classical oil painting style, rich vintage colors, historical architecture',
-      anime: 'anime manga style illustration, dynamic composition, bold colors, clean lines'
+      // 东方风格
+      wuxia: 'Chinese wuxia martial arts style, flowing robes, sword aura, misty mountains backdrop, ink wash painting elements',
+      xuanhuan: 'Eastern fantasy cultivation style, glowing spiritual energy, floating immortal palaces, mystical clouds, Chinese mythological elements',
+      xianxia: 'Chinese immortal cultivation style, celestial atmosphere, ethereal lighting, floating islands, Taoist elements',
+      ancient: 'Ancient Chinese palace style, elegant hanfu costumes, golden and red colors, imperial architecture',
+      ink: 'Traditional Chinese ink wash painting style, monochrome with subtle colors, calligraphic brushstrokes, poetic atmosphere',
+      // 西方风格
+      fantasy: 'epic Western fantasy style, magical glowing elements, mystical purple and blue atmosphere, medieval fantasy setting',
+      medieval: 'medieval European style, knights and castles, warm candlelight, heraldry elements, stone architecture',
+      gothic: 'dark gothic style, cathedral architecture, dramatic shadows, deep red and black, mysterious atmosphere',
+      steampunk: 'steampunk Victorian style, brass gears and machinery, warm amber tones, industrial elegance',
+      // 现代风格
+      modern: 'modern urban style, contemporary fashion, city skyline, clean design, warm sunset colors',
+      scifi: 'sci-fi futuristic style, sleek technology, holographic displays, blue and silver metallic',
+      cyberpunk: 'cyberpunk neon style, rain-slicked streets, neon signs, pink and cyan colors, high contrast',
+      mecha: 'mecha anime style, giant robots, dramatic poses, metallic textures, explosive action',
+      // 情感风格
+      romance: 'romantic dreamy style, soft pink and gold colors, flower petals, bokeh lights, emotional atmosphere',
+      youth: 'youth campus style, school uniforms, cherry blossoms, bright colors, nostalgic feeling',
+      warm: 'warm healing style, cozy atmosphere, soft lighting, pastel colors, heartwarming scene',
+      // 其他风格
+      horror: 'dark horror style, deep shadows, blood red accents, fog, unsettling atmosphere',
+      mystery: 'mystery thriller style, dramatic lighting, shadows, noir elements, suspenseful mood',
+      apocalypse: 'post-apocalyptic style, ruined cityscape, dusty atmosphere, survival elements, dramatic sky',
+      anime: 'anime manga style, dynamic composition, bold colors, clean lines, expressive characters',
+      realistic: 'realistic oil painting style, detailed textures, classical composition, rich colors',
+      comic: 'comic book illustration style, bold outlines, vibrant colors, dynamic action poses'
     }
 
-    const styleDesc = styleDescriptions[style] || styleDescriptions.fantasy
+    const styleDesc = styleDescriptions[style] || styleDescriptions.xuanhuan
     const genreDesc = genres.slice(0, 2).join(' ') || 'fantasy'
 
-    const prompt = `Create a beautiful book cover image: ${styleDesc}, theme "${bookTitle}", genre ${genreDesc}, professional quality, vertical portrait orientation, atmospheric, cinematic lighting, high detail, no text, no letters, no watermarks`
+    // 构建角色描述
+    let characterDesc = ''
+    if (characters && characters.length > 0) {
+      const charDescriptions = characters.map(char => {
+        const role = char.role === 'protagonist' ? 'main character' : char.role === 'antagonist' ? 'villain' : 'supporting character'
+        // 从角色设定中提取外貌描述
+        const appearance = char.description?.slice(0, 150) || ''
+        return `${role} "${char.name}": ${appearance}`
+      }).join('; ')
+
+      characterDesc = `, featuring characters: ${charDescriptions}`
+    }
+
+    // 根据是否有角色调整构图
+    const composition = characters && characters.length > 0
+      ? 'character-focused composition with figures prominently displayed'
+      : 'atmospheric landscape composition'
+
+    const prompt = `Create a stunning book cover illustration: ${styleDesc}, book title theme "${bookTitle}", genre ${genreDesc}${characterDesc}. ${composition}, professional quality, vertical portrait orientation (3:4 ratio), cinematic dramatic lighting, ultra detailed, masterpiece quality. IMPORTANT: Do not include any text, letters, words, or watermarks in the image.`
 
     const errors: string[] = []
 
