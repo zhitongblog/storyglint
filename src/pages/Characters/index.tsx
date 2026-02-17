@@ -25,6 +25,7 @@ import {
 } from '@ant-design/icons'
 import { useProjectStore } from '../../stores/project'
 import { generateCharacter, isGeminiReady, initGemini } from '../../services/gemini'
+import { analyzeAllChapterAppearances } from '../../services/character-utils'
 import type { Character } from '../../types'
 
 const { TextArea } = Input
@@ -46,6 +47,7 @@ function Characters() {
   const {
     currentProject,
     characters,
+    chapters,
     loadProject,
     createCharacter,
     updateCharacter,
@@ -54,6 +56,7 @@ function Characters() {
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isFixingStatus, setIsFixingStatus] = useState(false)
   const [editingCharacter, setEditingCharacter] = useState<Partial<Character> | null>(
     null
   )
@@ -164,6 +167,100 @@ function Characters() {
     })
   }
 
+  // 批量修复角色状态（扫描所有章节）
+  const handleFixCharacterStatus = async () => {
+    if (characters.length === 0) {
+      message.warning('暂无角色')
+      return
+    }
+
+    if (chapters.length === 0) {
+      message.warning('暂无章节内容，无法扫描')
+      return
+    }
+
+    setIsFixingStatus(true)
+    try {
+      // 收集所有章节正文
+      const chaptersContent = chapters
+        .filter(c => c.content && c.content.trim())
+        .map(c => c.content)
+
+      if (chaptersContent.length === 0) {
+        message.warning('所有章节均无正文内容')
+        setIsFixingStatus(false)
+        return
+      }
+
+      // 分析出场情况
+      const analysis = analyzeAllChapterAppearances(chaptersContent, characters)
+
+      // 找出需要更新的角色
+      const toUpdate = analysis.filter(a => a.shouldBeActive)
+
+      if (toUpdate.length === 0) {
+        message.info('所有角色状态已正确，无需修复')
+        setIsFixingStatus(false)
+        return
+      }
+
+      // 显示确认对话框
+      Modal.confirm({
+        title: '修复角色状态',
+        width: 500,
+        content: (
+          <div>
+            <p style={{ marginBottom: 12 }}>
+              扫描了 {chaptersContent.length} 章内容，发现以下 {toUpdate.length} 个角色状态需要修复：
+            </p>
+            <div style={{ maxHeight: 200, overflow: 'auto' }}>
+              {toUpdate.map((item, i) => (
+                <div key={i} style={{ padding: '4px 0', borderBottom: '1px solid #0f3460' }}>
+                  <strong>{item.characterName}</strong>
+                  <span style={{ marginLeft: 8, color: '#888' }}>
+                    出现 {item.appearanceCount} 次，当前状态：{statusLabels[item.currentStatus]?.text}
+                  </span>
+                  <span style={{ marginLeft: 8, color: '#52c41a' }}>
+                    → 将更新为"活跃"
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ),
+        okText: '确认修复',
+        cancelText: '取消',
+        onOk: async () => {
+          // 批量更新
+          let successCount = 0
+          for (const item of toUpdate) {
+            try {
+              await updateCharacter(item.characterId, { status: 'active' })
+              successCount++
+            } catch (err) {
+              console.error(`更新角色 ${item.characterName} 失败:`, err)
+            }
+          }
+
+          // 重新加载角色
+          if (projectId) {
+            await loadProject(projectId)
+          }
+
+          message.success(`成功修复 ${successCount} 个角色状态`)
+        },
+        onCancel: () => {
+          setIsFixingStatus(false)
+        }
+      })
+    } catch (error: any) {
+      console.error('修复角色状态失败:', error)
+      message.error('修复失败: ' + error.message)
+    } finally {
+      setIsFixingStatus(false)
+    }
+  }
+
   if (!currentProject) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -180,14 +277,25 @@ function Characters() {
           <h1 className="text-2xl font-bold text-dark-text mb-1">角色核心</h1>
           <p className="text-dark-muted">管理你故事中的所有角色</p>
         </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleOpenCreate}
-          className="gradient-button"
-        >
-          新建角色
-        </Button>
+        <Space>
+          <Tooltip title="扫描所有章节，自动更新已出场角色状态">
+            <Button
+              icon={<SyncOutlined spin={isFixingStatus} />}
+              onClick={handleFixCharacterStatus}
+              loading={isFixingStatus}
+            >
+              修复状态
+            </Button>
+          </Tooltip>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleOpenCreate}
+            className="gradient-button"
+          >
+            新建角色
+          </Button>
+        </Space>
       </div>
 
       {/* 标签过滤 */}

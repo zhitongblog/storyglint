@@ -42,7 +42,9 @@ import {
   quickAnalyzeDeaths,
   detectDeceasedInContent,
   formatViolationWarning,
-  buildDeathConfirmationPrompt
+  buildDeathConfirmationPrompt,
+  detectCharacterAppearances,
+  formatAppearanceUpdateMessage
 } from '../../services/character-utils'
 import {
   writeChapterStrict,
@@ -321,6 +323,27 @@ function Editor() {
       // 保持编辑器中的HTML格式不变，只标记为已保存
       setModified(false)
       message.success('保存成功')
+
+      // 自动检测角色出场，更新状态从"待登场"到"活跃"
+      if (formattedContent && characters.length > 0) {
+        const { pendingToActive } = detectCharacterAppearances(formattedContent, characters)
+        if (pendingToActive.length > 0) {
+          // 静默更新角色状态
+          const updatedNames: string[] = []
+          for (const charId of pendingToActive) {
+            const char = characters.find(c => c.id === charId)
+            if (char) {
+              await updateCharacter(charId, { status: 'active' })
+              updatedNames.push(char.name)
+            }
+          }
+          if (updatedNames.length > 0) {
+            console.log(`[角色状态] 自动更新 ${updatedNames.length} 个角色为活跃:`, updatedNames)
+            // 可选：显示提示
+            // message.info(formatAppearanceUpdateMessage(updatedNames))
+          }
+        }
+      }
 
       // 方案一：保存后自动分析角色死亡事件
       if (formattedContent && characters.length > 0) {

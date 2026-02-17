@@ -264,3 +264,192 @@ ${potentialDeaths.map(name => `• ${name}`).join('\n')}
 是否将这些角色标记为已故？
 （标记后，AI写作时将自动避免让他们出场）`
 }
+
+/**
+ * 检测正文中出现的角色
+ * 用于自动更新角色状态从 pending 到 active
+ * @param content - 章节正文内容
+ * @param characters - 角色列表
+ * @returns 出现的角色ID列表
+ */
+export function detectCharacterAppearances(
+  content: string,
+  characters: Character[]
+): {
+  appearedCharacterIds: string[]  // 在正文中出现的角色ID
+  pendingToActive: string[]        // 需要从pending更新为active的角色ID
+} {
+  const appearedCharacterIds: string[] = []
+  const pendingToActive: string[] = []
+
+  // 移除HTML标签，获取纯文本
+  const plainText = content.replace(/<[^>]*>/g, '')
+
+  for (const char of characters) {
+    // 检查角色名是否在正文中出现
+    if (plainText.includes(char.name)) {
+      appearedCharacterIds.push(char.id)
+
+      // 如果角色状态是pending，标记需要更新
+      if (char.status === 'pending') {
+        pendingToActive.push(char.id)
+      }
+    }
+  }
+
+  return { appearedCharacterIds, pendingToActive }
+}
+
+/**
+ * 批量检测所有章节中的角色出场情况
+ * 用于修复历史数据
+ * @param chaptersContent - 所有章节的正文内容数组
+ * @param characters - 角色列表
+ * @returns 每个角色的出场统计
+ */
+export function analyzeAllChapterAppearances(
+  chaptersContent: string[],
+  characters: Character[]
+): {
+  characterId: string
+  characterName: string
+  currentStatus: string
+  appearanceCount: number
+  shouldBeActive: boolean
+}[] {
+  const results: {
+    characterId: string
+    characterName: string
+    currentStatus: string
+    appearanceCount: number
+    shouldBeActive: boolean
+  }[] = []
+
+  // 合并所有章节内容用于检测
+  const allContent = chaptersContent.join('\n').replace(/<[^>]*>/g, '')
+
+  for (const char of characters) {
+    // 计算出现次数
+    const regex = new RegExp(char.name, 'g')
+    const matches = allContent.match(regex)
+    const count = matches ? matches.length : 0
+
+    results.push({
+      characterId: char.id,
+      characterName: char.name,
+      currentStatus: char.status,
+      appearanceCount: count,
+      // 出现过且状态为pending的角色应该更新为active
+      shouldBeActive: count > 0 && char.status === 'pending'
+    })
+  }
+
+  return results
+}
+
+/**
+ * 从正文中提取可能的新角色名字
+ * 使用简单的启发式方法检测人名
+ * @param content - 章节正文内容
+ * @param existingNames - 已有角色名列表（排除）
+ * @returns 可能的新角色名列表
+ */
+export function extractPotentialNewCharacters(
+  content: string,
+  existingNames: string[]
+): string[] {
+  const plainText = content.replace(/<[^>]*>/g, '')
+  const potentialNames: Set<string> = new Set()
+
+  // 模式1：对话引导词 - "XXX说"、"XXX道"、"XXX问" 等
+  const dialoguePatterns = [
+    /["「『].*?["」』].*?([^，。！？、\s]{2,4})(说|道|问|答|喊|叫|笑|怒|叹)/g,
+    /([^，。！？、\s]{2,4})(说|道|问|答|喊|叫|笑道|冷笑|大喊|低声)[:：]?\s*["「『]/g
+  ]
+
+  for (const pattern of dialoguePatterns) {
+    let match
+    while ((match = pattern.exec(plainText)) !== null) {
+      const name = match[1]
+      if (name && isValidChineseName(name)) {
+        potentialNames.add(name)
+      }
+    }
+  }
+
+  // 模式2：动作描述 - "XXX转身"、"XXX走了过来" 等
+  const actionPatterns = [
+    /([^，。！？、\s]{2,4})(转身|走|跑|站|坐|躺|跪|跳|冲|挥|举|拿|放|看|望|听|想|觉得)/g
+  ]
+
+  for (const pattern of actionPatterns) {
+    let match
+    while ((match = pattern.exec(plainText)) !== null) {
+      const name = match[1]
+      if (name && isValidChineseName(name)) {
+        potentialNames.add(name)
+      }
+    }
+  }
+
+  // 模式3：称呼模式 - "这位XXX"、"那个XXX"
+  const titlePatterns = [
+    /(这位|那位|那个|这个)([^，。！？、\s]{2,4})/g
+  ]
+
+  for (const pattern of titlePatterns) {
+    let match
+    while ((match = pattern.exec(plainText)) !== null) {
+      const name = match[2]
+      if (name && isValidChineseName(name)) {
+        potentialNames.add(name)
+      }
+    }
+  }
+
+  // 排除已有角色
+  const existingSet = new Set(existingNames)
+  const newNames = Array.from(potentialNames).filter(name => !existingSet.has(name))
+
+  // 排除常见的非人名词汇
+  const excludeWords = [
+    '自己', '对方', '众人', '大家', '所有', '一切', '这里', '那里',
+    '此时', '当时', '这时', '那时', '之后', '之前', '突然', '居然',
+    '竟然', '果然', '虽然', '当然', '显然', '必然', '偶然', '忽然',
+    '仿佛', '似乎', '好像', '看来', '想来', '说来', '听来',
+    '少年', '青年', '老人', '女子', '男子', '少女', '老者'
+  ]
+
+  return newNames.filter(name => !excludeWords.includes(name))
+}
+
+/**
+ * 简单的中文人名验证
+ */
+function isValidChineseName(name: string): boolean {
+  // 2-4个汉字
+  if (!/^[\u4e00-\u9fa5]{2,4}$/.test(name)) {
+    return false
+  }
+
+  // 排除常见的非人名开头
+  const invalidStarts = ['一个', '那个', '这个', '什么', '为什', '怎么', '如何', '如果', '虽然', '但是', '因为', '所以']
+  for (const start of invalidStarts) {
+    if (name.startsWith(start.slice(0, 2))) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * 格式化角色出场更新提示
+ */
+export function formatAppearanceUpdateMessage(
+  updatedNames: string[]
+): string {
+  if (updatedNames.length === 0) return ''
+
+  return `✅ 已自动更新 ${updatedNames.length} 个角色状态为"活跃"：${updatedNames.join('、')}`
+}
