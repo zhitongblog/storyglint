@@ -544,7 +544,50 @@ function Outline() {
       console.log('🎉 [大纲生成] 生成完成！')
 
       const modeText = generateMode === 'oneByOne' ? '(逐章)' : '(批量)'
-      message.success(`${modeText} 成功追加生成 ${generatedChapters.length} 章大纲！`)
+
+      // 检查是否有边界验证警告
+      const validationResult = (generatedChapters as any).__validationResult
+      if (validationResult && !validationResult.isValid) {
+        // 有边界问题，显示警告
+        const errorCount = validationResult.errors?.length || 0
+        const warningCount = validationResult.warnings?.length || 0
+        Modal.warning({
+          title: '大纲边界检测警告',
+          width: 600,
+          content: (
+            <div style={{ maxHeight: 400, overflow: 'auto' }}>
+              <p style={{ marginBottom: 16 }}>
+                生成的大纲存在以下边界问题，建议人工检查并修正：
+              </p>
+              {validationResult.errors?.map((err: any, i: number) => (
+                <div key={i} style={{
+                  padding: '8px 12px',
+                  marginBottom: 8,
+                  background: err.severity === 'high' ? '#fff2f0' : '#fffbe6',
+                  border: `1px solid ${err.severity === 'high' ? '#ffccc7' : '#ffe58f'}`,
+                  borderRadius: 4
+                }}>
+                  <div style={{ fontWeight: 500 }}>
+                    {err.type === 'past_repeat' ? '🔙' : '⏩'} 第{err.chapterNumber}章《{err.chapterTitle}》
+                  </div>
+                  <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                    {err.description}
+                    {err.conflictSource && <span> → 冲突来源：{err.conflictSource}</span>}
+                  </div>
+                </div>
+              ))}
+              {warningCount > 0 && (
+                <div style={{ marginTop: 12, color: '#666', fontSize: 12 }}>
+                  另有 {warningCount} 个轻微警告
+                </div>
+              )}
+            </div>
+          )
+        })
+        message.warning(`${modeText} 生成 ${generatedChapters.length} 章，发现 ${errorCount} 个边界问题`)
+      } else {
+        message.success(`${modeText} 成功追加生成 ${generatedChapters.length} 章大纲！`)
+      }
 
       // 清空指导意见
       setGenerateGuidance('')

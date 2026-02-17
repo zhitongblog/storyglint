@@ -1,6 +1,13 @@
 import { generateText } from './gemini'
-import type { Character, Volume } from '../types'
+import type { Character, Volume, Chapter } from '../types'
 import { buildCompressedContext } from './outline-optimizer'
+import {
+  buildVolumeBoundary,
+  buildBoundaryConstraintPrompt,
+  validateGeneratedOutlines,
+  formatValidationResult,
+  type ValidationResult
+} from './outline-validator'
 
 interface AutoCreateResult {
   worldSetting: string
@@ -299,6 +306,7 @@ function buildVolumeChaptersPrompt(
     writtenChaptersSummary?: string[]
     existingChapterOutlines?: string[]  // 已有章节大纲列表
     volumeIndex?: string  // 全书卷索引（压缩模式）
+    boundaryConstraint?: string  // 边界约束提示词（新增）
   }
 ): string {
   // 构建角色档案信息（包含关系、状态等）
@@ -438,6 +446,11 @@ function buildVolumeChaptersPrompt(
       contextSection += '- 不可重复已写的情节、对话、场景\n'
       contextSection += '- 必须从上述内容之后继续推进剧情\n'
       contextSection += '- 新章节起点 = 已写内容的终点\n'
+    }
+
+    // 添加强化边界约束
+    if (contextInfo.boundaryConstraint) {
+      contextSection += contextInfo.boundaryConstraint
     }
   }
 
@@ -580,6 +593,27 @@ export async function generateVolumeChapters(
       })
     }
 
+    // 构建边界约束（如果有卷信息）
+    if (allVolumes && allVolumes.length > 0) {
+      const currentVolume = allVolumes[volumeIndex] || { title: volume.title, summary: volume.summary } as Volume
+      const previousVolume = volumeIndex > 0 ? allVolumes[volumeIndex - 1] : undefined
+      const nextVolume = volumeIndex < allVolumes.length - 1 ? allVolumes[volumeIndex + 1] : undefined
+
+      const boundary = buildVolumeBoundary(currentVolume, volumeIndex, previousVolume, nextVolume)
+      const boundaryPrompt = buildBoundaryConstraintPrompt(boundary)
+
+      effectiveContextInfo = {
+        ...effectiveContextInfo,
+        boundaryConstraint: boundaryPrompt
+      } as any
+
+      console.log('[AutoCreate] 边界约束已添加:', {
+        mustComplete: boundary.mustCompleteEvents.length,
+        forbidden: boundary.forbiddenEvents.length,
+        completed: boundary.completedEvents.length
+      })
+    }
+
     const prompt = buildVolumeChaptersPrompt(
       effectiveWorldSetting,
       characters.map(c => ({
@@ -611,6 +645,26 @@ export async function generateVolumeChapters(
     const chapters = parseChaptersResponse(response, chapterCount, startChapterNumber)
 
     console.log('[AutoCreate] 成功生成章节数:', chapters.length)
+
+    // 验证生成的章节是否有边界冲突
+    if (allVolumes && allVolumes.length > 0) {
+      const currentVolume = allVolumes[volumeIndex] || { title: volume.title, summary: volume.summary } as Volume
+      const previousVolume = volumeIndex > 0 ? allVolumes[volumeIndex - 1] : undefined
+      const nextVolume = volumeIndex < allVolumes.length - 1 ? allVolumes[volumeIndex + 1] : undefined
+
+      const boundary = buildVolumeBoundary(currentVolume, volumeIndex, previousVolume, nextVolume)
+      const validationResult = validateGeneratedOutlines(chapters, boundary)
+
+      if (!validationResult.isValid) {
+        console.warn('[AutoCreate] 大纲边界验证发现问题:')
+        console.warn(formatValidationResult(validationResult))
+        // 将验证结果附加到章节数据中（供UI层读取）
+        ;(chapters as any).__validationResult = validationResult
+      } else {
+        console.log('[AutoCreate] 大纲边界验证通过')
+      }
+    }
+
     return chapters
   } catch (error: any) {
     console.error('[AutoCreate] 生成章节大纲失败:', error)
