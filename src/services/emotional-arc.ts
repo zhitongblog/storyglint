@@ -12,9 +12,7 @@ import { generateText } from './gemini'
 import type {
   EmotionPoint,
   EmotionalArc,
-  EmotionSuggestion,
-  calculateEmotionalTrend,
-  suggestNextEmotion
+  EmotionSuggestion
 } from '../types/memory'
 
 /**

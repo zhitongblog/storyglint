@@ -1,6 +1,7 @@
 import { generateText } from './gemini'
 import type { Character } from '../types'
-import { getFullAntiAIGuidelines, getSceneSpecificGuidelines, generateSelfCheckList, ENHANCED_ANTI_AI_GUIDELINES } from './anti-ai-guidelines'
+// Anti-AI guidelines integrated into prompts
+// import { getFullAntiAIGuidelines, getSceneSpecificGuidelines, generateSelfCheckList, ENHANCED_ANTI_AI_GUIDELINES } from './anti-ai-guidelines'
 
 /**
  * 生成剧情摘要 - 用于保持长篇连贯性

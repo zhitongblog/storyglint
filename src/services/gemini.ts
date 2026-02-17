@@ -31,10 +31,10 @@ import {
   setProvider,
   getCurrentProviderType
 } from './ai'
-import type { QuotaInfo } from './ai'
+import type { QuotaInfo, ModelInfo } from './ai'
 
 // 导出模型配置（保持向后兼容）
-export const AVAILABLE_MODELS = getAvailableModels()
+export const AVAILABLE_MODELS: Record<string, ModelInfo> = getAvailableModels()
 
 /**
  * 初始化 Gemini API

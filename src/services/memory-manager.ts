@@ -15,9 +15,7 @@ import type {
   WorldState,
   RecentMemory,
   CharacterState,
-  ChapterSummary,
-  EmotionPoint,
-  createEmptyLayeredMemory
+  ChapterSummary
 } from '../types/memory'
 import type { Character, Volume, Chapter } from '../types'
 import { analyzeChapterEmotion } from './emotional-arc'
