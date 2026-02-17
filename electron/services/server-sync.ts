@@ -163,22 +163,37 @@ export class ServerSyncService {
           await this.uploadProject(localProject, accessToken)
           uploaded++
         } else {
-          // 比较时间戳
+          // 优先比较版本号，时间戳作为辅助
+          const localVersion = localProject.version || 0
+          const serverVersion = serverProject.version || 0
           const localTime = new Date(localProject.updatedAt).getTime()
           const serverTime = new Date(serverProject.lastModifiedAt).getTime()
 
-          if (localTime > serverTime) {
-            // 本地更新 -> 上传
-            console.log('[ServerSync] 上传更新的项目:', localProject.title)
+          console.log(`[ServerSync] 比较项目 ${localProject.title}: 本地版本=${localVersion}, 服务端版本=${serverVersion}`)
+
+          if (localVersion > serverVersion) {
+            // 本地版本更高 -> 上传
+            console.log('[ServerSync] 本地版本更高，上传项目:', localProject.title)
             await this.uploadProject(localProject, accessToken)
             uploaded++
-          } else if (serverTime > localTime) {
-            // 服务端更新 -> 下载
-            console.log('[ServerSync] 下载更新的项目:', localProject.title)
+          } else if (serverVersion > localVersion) {
+            // 服务端版本更高 -> 下载
+            console.log('[ServerSync] 服务端版本更高，下载项目:', localProject.title)
             await this.downloadProject(serverProject.id, accessToken)
             downloaded++
+          } else {
+            // 版本相同，使用时间戳作为辅助判断
+            if (localTime > serverTime) {
+              console.log('[ServerSync] 版本相同但本地时间更新，上传项目:', localProject.title)
+              await this.uploadProject(localProject, accessToken)
+              uploaded++
+            } else if (serverTime > localTime) {
+              console.log('[ServerSync] 版本相同但服务端时间更新，下载项目:', localProject.title)
+              await this.downloadProject(serverProject.id, accessToken)
+              downloaded++
+            }
+            // 版本和时间都相同 -> 无需同步
           }
-          // 时间相同 -> 无需同步
         }
       } catch (error: any) {
         console.error('[ServerSync] 同步项目失败:', localProject.title, error)

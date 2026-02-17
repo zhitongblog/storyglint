@@ -53,7 +53,8 @@ function Outline() {
     createChapter,
     updateChapter,
     deleteChapter,
-    loadAllChapters
+    loadAllChapters,
+    setGenerating
   } = useProjectStore()
 
   const [generatingVolumeId, setGeneratingVolumeId] = useState<string | null>(null)
@@ -222,8 +223,8 @@ function Outline() {
     initApi()
   }, [])
 
-  // 为单卷生成章节大纲
-  const handleGenerateVolumeChapters = async (volumeId: string, mode: 'new' | 'regenerate') => {
+  // 为单卷生成章节大纲（只支持追加生成，不允许自动删除）
+  const handleGenerateVolumeChapters = async (volumeId: string) => {
     if (!currentProject) return
 
     const volume = volumes.find(v => v.id === volumeId)
@@ -242,26 +243,18 @@ function Outline() {
 
     const existingChapters = chapters.filter(c => c.volumeId === volumeId)
 
-    if (mode === 'regenerate' && existingChapters.length > 0) {
-      Modal.confirm({
-        title: '确认清空并重新生成',
-        content: `该卷已有 ${existingChapters.length} 章，清空重新生成将删除所有现有章节及其内容。是否继续？`,
-        okText: '清空重新生成',
-        okType: 'danger',
-        cancelText: '取消',
-        onOk: () => {
-          setShowGenerateModal(null)
-          doGenerateChapters(volumeId, volume, true)
-        },
-        onCancel: () => {
-          setShowGenerateModal(null)
-        }
-      })
-    } else if (mode === 'new' && existingChapters.length > 0) {
-      // 追加生成模式：如果已有章节，显示警告避免误操作
+    if (existingChapters.length > 0) {
+      // 已有章节，显示确认追加生成
       Modal.confirm({
         title: '确认追加生成',
-        content: `该卷已有 ${existingChapters.length} 章，追加生成将在现有章节后新增 ${generateChapterCount} 章。确认继续？`,
+        content: (
+          <div>
+            <p>该卷已有 <strong>{existingChapters.length}</strong> 章，追加生成将在现有章节后新增 <strong>{generateChapterCount}</strong> 章。</p>
+            <p className="text-dark-muted text-sm mt-2">
+              💡 如需清空现有章节，请使用卷标题右侧的"清空本卷所有章节"按钮。
+            </p>
+          </div>
+        ),
         okText: '追加生成',
         cancelText: '取消',
         onOk: () => {
@@ -273,17 +266,20 @@ function Outline() {
         }
       })
     } else {
+      // 无现有章节，直接生成
       setShowGenerateModal(null)
-      doGenerateChapters(volumeId, volume, mode === 'regenerate')
+      doGenerateChapters(volumeId, volume, false)
     }
   }
 
-  const doGenerateChapters = async (volumeId: string, volume: typeof volumes[0], shouldDelete: boolean = false) => {
+  const doGenerateChapters = async (volumeId: string, volume: typeof volumes[0], _shouldDelete: boolean = false) => {
+    // 注意：_shouldDelete 参数已废弃，保留仅为兼容性，始终使用追加模式
+    // 用户如需删除章节，应使用"清空本卷所有章节"按钮手动删除
     if (!currentProject) return
 
     console.log('🚀 [大纲生成] 开始生成章节...')
     console.log(`📦 卷信息: ${volume.title}`)
-    console.log(`🔄 模式: ${shouldDelete ? '清空重新生成' : '追加生成'}`)
+    console.log(`🔄 模式: 追加生成（自动删除已禁用）`)
 
     try {
       // 🔒 数据库级别的锁检查（防止并发生成）
@@ -315,6 +311,8 @@ function Outline() {
       // 设置前端锁（用于UI状态）
       setGeneratingVolumeId(volumeId)
       setGeneratingProgress(10)
+      // 设置全局生成状态（用于导航守卫）
+      setGenerating(true)
 
       // 重新加载章节列表，获取数据库最新状态
       console.log('🔄 [大纲生成] 重新加载章节列表以获取最新状态...')
@@ -326,13 +324,7 @@ function Outline() {
       const existingChapters = latestChapters.sort((a: any, b: any) => a.order - b.order)
       console.log(`📊 [大纲生成] 数据库中现有章节数: ${existingChapters.length}`)
 
-      // 如果是清空重新生成模式，先删除旧章节
-      if (shouldDelete) {
-        console.log(`🗑️ [大纲生成] 清空模式：删除 ${existingChapters.length} 个现有章节`)
-        for (const ch of existingChapters) {
-          await deleteChapter(ch.id)
-        }
-      }
+      // 注意：已移除自动删除逻辑，用户需通过"清空本卷所有章节"按钮手动删除
 
       setGeneratingProgress(15)
 
@@ -369,8 +361,8 @@ function Outline() {
           }
         : null
 
-      // 收集本卷已写内容的摘要（仅在追加生成时使用）
-      const writtenChaptersSummary = !shouldDelete && existingChapters.length > 0
+      // 收集本卷已写内容的摘要（追加生成时使用）
+      const writtenChaptersSummary = existingChapters.length > 0
         ? existingChapters
             .filter(c => c.content && c.content.trim().length > 100)
             .map(c => {
@@ -396,7 +388,7 @@ function Outline() {
       if (generateMode === 'oneByOne') {
         // 逐章生成模式（节约token）
         console.log('📝 [大纲生成] 使用逐章生成模式')
-        const existingOutlines = shouldDelete ? [] : existingChapters.map(c => ({
+        const existingOutlines = existingChapters.map(c => ({
           title: c.title,
           outline: c.outline
         }))
@@ -409,9 +401,8 @@ function Outline() {
           chaptersBeforeCurrentVolume += volChapters.length
         }
 
-        const startChapterNumber = shouldDelete
-          ? chaptersBeforeCurrentVolume + 1  // 清空重新生成：前面卷的章节数 + 1
-          : chaptersBeforeCurrentVolume + existingChapters.length + 1  // 追加：前面卷 + 当前卷已有 + 1
+        // 追加模式：前面卷 + 当前卷已有 + 1
+        const startChapterNumber = chaptersBeforeCurrentVolume + existingChapters.length + 1
 
         console.log(`📊 [大纲生成] 章节编号: 从第 ${startChapterNumber} 章开始，共生成 ${generateChapterCount} 章`)
 
@@ -467,12 +458,11 @@ function Outline() {
           chaptersBeforeCurrentVolume += volChapters.length
         }
 
-        const startChapterNumber = shouldDelete
-          ? chaptersBeforeCurrentVolume + 1  // 清空重新生成：前面卷的章节数 + 1
-          : chaptersBeforeCurrentVolume + existingChapters.length + 1  // 追加：前面卷 + 当前卷已有 + 1
+        // 追加模式：前面卷 + 当前卷已有 + 1
+        const startChapterNumber = chaptersBeforeCurrentVolume + existingChapters.length + 1
 
-        // 准备上下文信息（追加生成时包含已有章节大纲列表）
-        const existingChapterOutlines = !shouldDelete && existingChapters.length > 0
+        // 准备上下文信息（包含已有章节大纲列表）
+        const existingChapterOutlines = existingChapters.length > 0
           ? existingChapters.map(c => `${c.title}: ${c.outline || '(无大纲)'}`)
           : undefined
 
@@ -554,8 +544,7 @@ function Outline() {
       console.log('🎉 [大纲生成] 生成完成！')
 
       const modeText = generateMode === 'oneByOne' ? '(逐章)' : '(批量)'
-      const actionText = shouldDelete ? '重新生成' : '追加生成'
-      message.success(`${modeText} 成功${actionText} ${generatedChapters.length} 章大纲！`)
+      message.success(`${modeText} 成功追加生成 ${generatedChapters.length} 章大纲！`)
 
       // 清空指导意见
       setGenerateGuidance('')
@@ -566,7 +555,7 @@ function Outline() {
         stack: error.stack,
         volumeId,
         volumeTitle: volume.title,
-        mode: shouldDelete ? 'regenerate' : 'append'
+        mode: 'append'
       })
 
       // 显示更详细的错误信息
@@ -618,6 +607,8 @@ function Outline() {
       // 清除前端锁
       setGeneratingVolumeId(null)
       setGeneratingProgress(0)
+      // 清除全局生成状态
+      setGenerating(false)
     }
   }
 
@@ -1204,27 +1195,20 @@ function Outline() {
                 : 0
               return (
                 <>
-                  {existingCount > 0 && (
-                    <Button
-                      type="primary"
-                      block
-                      size="large"
-                      icon={<PlusOutlined />}
-                      onClick={() => showGenerateModal && handleGenerateVolumeChapters(showGenerateModal, 'new')}
-                    >
-                      追加生成（保留现有 {existingCount} 章）
-                    </Button>
-                  )}
                   <Button
-                    type={existingCount > 0 ? 'default' : 'primary'}
-                    danger={existingCount > 0}
+                    type="primary"
                     block
                     size="large"
-                    icon={<SyncOutlined />}
-                    onClick={() => showGenerateModal && handleGenerateVolumeChapters(showGenerateModal, 'regenerate')}
+                    icon={<PlusOutlined />}
+                    onClick={() => showGenerateModal && handleGenerateVolumeChapters(showGenerateModal)}
                   >
-                    {existingCount > 0 ? `清空并重新生成（删除现有 ${existingCount} 章）` : '生成章节大纲'}
+                    {existingCount > 0 ? `追加生成（保留现有 ${existingCount} 章）` : '生成章节大纲'}
                   </Button>
+                  {existingCount > 0 && (
+                    <p className="text-dark-muted text-xs text-center">
+                      💡 如需清空现有章节，请使用卷标题右侧的"清空本卷所有章节"按钮
+                    </p>
+                  )}
                   <Button
                     block
                     onClick={() => {

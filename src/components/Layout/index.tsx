@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Layout as AntLayout, Menu, Avatar, Dropdown, Button, Space, Tooltip, message } from 'antd'
+import { Layout as AntLayout, Menu, Avatar, Dropdown, Button, Space, Tooltip, message, Modal } from 'antd'
 import {
   HomeOutlined,
   EditOutlined,
@@ -27,7 +27,7 @@ function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { projectId } = useParams()
-  const { currentProject } = useProjectStore()
+  const { currentProject, isGenerating, setGenerating } = useProjectStore()
   const [serverUser, setServerUser] = useState<ServerUser | null>(null)
   const [isServerLoggedIn, setIsServerLoggedIn] = useState(false)
 
@@ -128,6 +128,22 @@ function Layout() {
   ]
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
+    // 导航守卫：生成过程中阻止页面切换
+    if (isGenerating) {
+      Modal.confirm({
+        title: '正在生成中',
+        content: '章节大纲正在生成中，离开页面将停止生成。确定要离开吗？',
+        okText: '停止生成并离开',
+        okType: 'danger',
+        cancelText: '继续生成',
+        onOk: () => {
+          // 停止生成状态
+          setGenerating(false)
+          navigate(key)
+        }
+      })
+      return
+    }
     navigate(key)
   }
 

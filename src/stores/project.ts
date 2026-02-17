@@ -22,6 +22,10 @@ interface ProjectState {
   isLoading: boolean
   error: string | null
 
+  // 生成状态（用于导航守卫）
+  isGenerating: boolean
+  setGenerating: (value: boolean) => void
+
   // 项目操作
   loadProjects: () => Promise<void>
   loadProject: (id: string) => Promise<void>
@@ -68,6 +72,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   currentCharacter: null,
   isLoading: false,
   error: null,
+  isGenerating: false,
+
+  setGenerating: (value: boolean) => set({ isGenerating: value }),
 
   // ==================== 项目操作 ====================
 
