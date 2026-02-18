@@ -106,6 +106,15 @@ export interface ElectronAPI {
     getAppVersion: () => Promise<string>
     openExternal: (url: string) => void
   }
+
+  // AI API 请求（通过主进程代理）
+  ai: {
+    fetch: (url: string, options: {
+      method: string
+      headers: Record<string, string>
+      body?: string
+    }) => Promise<{ ok: boolean; status: number; data: any; error?: string }>
+  }
 }
 
 // 暴露 API 到渲染进程
@@ -200,7 +209,18 @@ const electronAPI: ElectronAPI = {
   system: {
     getAppVersion: () => ipcRenderer.invoke('system:getAppVersion'),
     openExternal: (url) => ipcRenderer.send('system:openExternal', url)
+  },
+
+  ai: {
+    fetch: (url, options) => ipcRenderer.invoke('ai:fetch', url, options)
   }
 }
 
 contextBridge.exposeInMainWorld('electron', electronAPI)
+
+// 声明全局类型
+declare global {
+  interface Window {
+    electron: ElectronAPI
+  }
+}

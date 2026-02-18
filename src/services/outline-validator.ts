@@ -50,11 +50,13 @@ export interface VolumeBoundary {
 /**
  * 从卷信息中提取关键事件
  * 改进：提取完整的事件描述而不是单个词，保留上下文
+ * 新增：区分"核心事件"和"起始事件"
  */
 export function extractKeyEvents(
   volumeSummary: string,
   keyEvents?: string[],
-  mainPlot?: string
+  mainPlot?: string,
+  volumeTitle?: string
 ): string[] {
   const events: string[] = []
 
@@ -81,15 +83,22 @@ export function extractKeyEvents(
     // 按标点分割成子句
     const clauses = volumeSummary.split(/[，。！？、；]/).filter(c => c.trim().length > 4)
 
-    // 关键动作词列表
+    // 关键动作词列表（按重要性排序）
     const actionKeywords = [
-      '击败', '战胜', '打败', '消灭', '杀死', '斩杀', '覆灭',
-      '突破', '晋级', '进阶', '觉醒', '获得', '得到', '习得',
-      '发现', '揭露', '揭开', '知道', '了解', '真相',
-      '结盟', '联合', '背叛', '反目', '决裂',
-      '逃离', '离开', '进入', '到达', '返回', '前往',
-      '比赛', '大赛', '考核', '试炼', '挑战', '参加',
-      '死亡', '牺牲', '陨落', '复活', '苏醒'
+      // 战斗/消灭类（高优先）
+      '击败', '战胜', '打败', '消灭', '杀死', '斩杀', '覆灭', '击杀',
+      // 成长/获得类（高优先）
+      '突破', '晋级', '进阶', '觉醒', '获得', '得到', '习得', '领悟',
+      // 发现/揭露类
+      '发现', '揭露', '揭开', '知道', '了解', '真相', '秘密',
+      // 关系变化类
+      '结盟', '联合', '背叛', '反目', '决裂', '相遇', '重逢',
+      // 位置变化类（可能是下一卷的开始）
+      '逃离', '离开', '进入', '到达', '返回', '前往', '踏入', '闯入',
+      // 事件类
+      '比赛', '大赛', '考核', '试炼', '挑战', '参加', '开始', '爆发',
+      // 生死类
+      '死亡', '牺牲', '陨落', '复活', '苏醒', '重生'
     ]
 
     for (const clause of clauses) {
@@ -102,9 +111,65 @@ export function extractKeyEvents(
     }
   }
 
-  // 去重并限制数量（最多5个）
+  // 4. 如果有卷名，尝试从卷名中提取核心主题
+  if (volumeTitle && events.length < 2) {
+    // 卷名通常是本卷的核心主题，也是重要的边界标识
+    events.push(`【本卷主题】${volumeTitle}`)
+  }
+
+  // 去重并限制数量（最多6个）
   const uniqueEvents = [...new Set(events)]
-  return uniqueEvents.slice(0, 5)
+  return uniqueEvents.slice(0, 6)
+}
+
+/**
+ * 提取卷的"起始事件"（用于标识下一卷不能提前写的内容）
+ * 起始事件通常是：到达新地点、开始新任务、触发新冲突等
+ */
+export function extractStartingEvents(
+  volumeSummary: string,
+  volumeTitle?: string,
+  keyEvents?: string[]
+): string[] {
+  const startingEvents: string[] = []
+
+  // 起始动作词（这些词通常标志着新阶段的开始）
+  const startingKeywords = [
+    '进入', '踏入', '来到', '到达', '前往', '闯入',  // 位置变化
+    '开始', '开启', '踏上', '启程', '出发',  // 新旅程
+    '参加', '加入', '报名', '接受',  // 新任务
+    '遇到', '相遇', '邂逅',  // 新角色
+    '爆发', '触发', '引发'  // 新冲突
+  ]
+
+  // 从卷摘要中提取起始事件
+  if (volumeSummary) {
+    const clauses = volumeSummary.split(/[，。！？、；]/).filter(c => c.trim().length > 3)
+    for (const clause of clauses) {
+      const trimmed = clause.trim()
+      const hasStarting = startingKeywords.some(kw => trimmed.includes(kw))
+      if (hasStarting && trimmed.length >= 4 && trimmed.length < 50) {
+        startingEvents.push(trimmed)
+      }
+    }
+  }
+
+  // 从卷名中提取（卷名通常暗示本卷的核心场景/任务）
+  if (volumeTitle) {
+    startingEvents.push(`进入/开始"${volumeTitle}"阶段`)
+  }
+
+  // 从关键事件中提取起始类事件
+  if (keyEvents && keyEvents.length > 0) {
+    for (const event of keyEvents) {
+      const hasStarting = startingKeywords.some(kw => event.includes(kw))
+      if (hasStarting) {
+        startingEvents.push(event)
+      }
+    }
+  }
+
+  return [...new Set(startingEvents)].slice(0, 4)
 }
 
 /**
@@ -133,7 +198,8 @@ export function buildVolumeBoundary(
     boundary.mustCompleteEvents = extractKeyEvents(
       currentVolume.summary,
       undefined,
-      currentVolume.mainPlot
+      currentVolume.mainPlot,
+      currentVolume.title
     )
   }
 
@@ -147,26 +213,48 @@ export function buildVolumeBoundary(
       boundary.completedEvents = extractKeyEvents(
         previousVolume.summary,
         undefined,
-        previousVolume.mainPlot
+        previousVolume.mainPlot,
+        previousVolume.title
       )
     }
-    boundary.startingState = `承接《${previousVolume.title}》结尾`
+    boundary.startingState = `承接《${previousVolume.title}》结尾，本卷从这里开始`
   }
 
-  // 下一卷的事件（不可提前写）
+  // 下一卷的事件（不可提前写）- 这是最重要的边界约束
   if (nextVolume) {
+    // 1. 提取下一卷的关键事件
+    let nextVolumeEvents: string[] = []
     if (nextVolume.keyEvents && nextVolume.keyEvents.length > 0) {
-      boundary.forbiddenEvents = [...nextVolume.keyEvents]
+      nextVolumeEvents = [...nextVolume.keyEvents]
     } else if (nextVolume.keyPoints && nextVolume.keyPoints.length > 0) {
-      boundary.forbiddenEvents = [...nextVolume.keyPoints]
+      nextVolumeEvents = [...nextVolume.keyPoints]
     } else {
-      boundary.forbiddenEvents = extractKeyEvents(
+      nextVolumeEvents = extractKeyEvents(
         nextVolume.summary,
         undefined,
-        nextVolume.mainPlot
+        nextVolume.mainPlot,
+        nextVolume.title
       )
     }
-    boundary.endingState = `为《${nextVolume.title}》做铺垫`
+
+    // 2. 提取下一卷的"起始事件"（这是本卷绝对不能写的）
+    const nextVolumeStartingEvents = extractStartingEvents(
+      nextVolume.summary,
+      nextVolume.title,
+      nextVolume.keyEvents
+    )
+
+    // 3. 合并禁止事件列表（起始事件优先级更高）
+    boundary.forbiddenEvents = [
+      ...nextVolumeStartingEvents,
+      ...nextVolumeEvents.filter(e => !nextVolumeStartingEvents.includes(e))
+    ].slice(0, 8)  // 限制数量避免token过多
+
+    // 4. 设置本卷结束状态
+    boundary.endingState = `本卷在"${currentVolume.title}"范围内结束，为《${nextVolume.title}》做铺垫，但不能开始《${nextVolume.title}》的任何剧情`
+  } else {
+    // 最后一卷
+    boundary.endingState = `本卷完成"${currentVolume.title}"的主线，为全书结局做铺垫`
   }
 
   return boundary
@@ -379,46 +467,77 @@ export function buildBoundaryConstraintPrompt(boundary: VolumeBoundary): string 
   let prompt = ''
 
   // 强制约束区域
-  prompt += '\n\n╔══════════════════════════════════════════════╗\n'
-  prompt += '║           【🚨 内容边界强制约束】              ║\n'
-  prompt += '╚══════════════════════════════════════════════╝\n\n'
+  prompt += '\n\n╔══════════════════════════════════════════════════════════════╗\n'
+  prompt += '║              【🚨🚨🚨 内容边界强制约束 🚨🚨🚨】                ║\n'
+  prompt += '║     违反以下约束的大纲将被系统自动拒绝，请务必严格遵守！       ║\n'
+  prompt += '╚══════════════════════════════════════════════════════════════╝\n\n'
 
-  // 禁止区域 - 过去的内容
-  if (boundary.completedEvents.length > 0) {
-    prompt += '🔴【禁区一：过去已完成】以下事件已在上一卷完成，本卷严禁重写：\n'
-    boundary.completedEvents.forEach((event, i) => {
-      prompt += `   ${i + 1}. ❌ ${event}\n`
-    })
-    prompt += '   → 这些是历史，不可改变，不可重演\n\n'
-  }
-
-  // 禁止区域 - 未来的内容
-  if (boundary.forbiddenEvents.length > 0) {
-    prompt += '🔴【禁区二：未来不可触碰】以下事件属于下一卷，本卷严禁提前写：\n'
-    boundary.forbiddenEvents.forEach((event, i) => {
-      prompt += `   ${i + 1}. ⛔ ${event}\n`
-    })
-    prompt += '   → 这些是未来，只能埋伏笔，不能直接写出\n\n'
-  }
-
-  // 本卷任务
+  // 本卷任务（放在最前面，让AI先明确目标）
   if (boundary.mustCompleteEvents.length > 0) {
-    prompt += '🟢【本卷核心任务】以下事件必须在本卷中完成或推进：\n'
+    prompt += '🟢【本卷核心任务 - 必须聚焦】\n'
+    prompt += '   本卷的全部内容必须围绕以下事件展开：\n'
     boundary.mustCompleteEvents.forEach((event, i) => {
       prompt += `   ${i + 1}. ✅ ${event}\n`
     })
-    prompt += '   → 这些是本卷的主线，必须聚焦\n\n'
+    prompt += '   ⚠️ 这些是本卷的唯一主线，所有章节都必须为这些事件服务！\n\n'
+  }
+
+  // 禁止区域 - 过去的内容
+  if (boundary.completedEvents.length > 0) {
+    prompt += '🔴【禁区一：上一卷已完成 - 严禁重复】\n'
+    prompt += '   以下事件已在上一卷完成，本卷绝对不能再写：\n'
+    boundary.completedEvents.forEach((event, i) => {
+      prompt += `   ${i + 1}. ❌ ${event}\n`
+    })
+    prompt += '   → 这些是历史，不可改变，不可重演，甚至不要提及\n\n'
+  }
+
+  // 禁止区域 - 未来的内容（最重要的约束）
+  if (boundary.forbiddenEvents.length > 0) {
+    prompt += '🔴🔴🔴【禁区二：下一卷内容 - 绝对禁止提前写】🔴🔴🔴\n'
+    prompt += '   以下是下一卷的核心内容，本卷严禁出现：\n'
+    boundary.forbiddenEvents.forEach((event, i) => {
+      prompt += `   ${i + 1}. ⛔⛔ ${event} ⛔⛔\n`
+    })
+    prompt += '\n'
+    prompt += '   ❌ 绝对禁止：\n'
+    prompt += '   • 不能写出下一卷的任何核心事件\n'
+    prompt += '   • 不能让主角提前到达下一卷的起点\n'
+    prompt += '   • 不能在本卷解决属于下一卷的冲突\n'
+    prompt += '   • 不能提前揭示属于下一卷的秘密\n'
+    prompt += '   • 本卷最后几章只能"铺垫"和"暗示"，绝不能"开始"下一卷\n'
+    prompt += '\n'
+    prompt += '   ✅ 正确做法：\n'
+    prompt += '   • 本卷结尾留下悬念，引向下一卷\n'
+    prompt += '   • 可以埋伏笔，但不能揭示\n'
+    prompt += '   • 可以暗示危机，但不能触发\n'
+    prompt += '   • 本卷的高潮是本卷任务的完成，不是下一卷的开始\n\n'
   }
 
   // 边界状态
+  prompt += '📍【本卷边界状态】\n'
   if (boundary.startingState) {
-    prompt += `📍【起始状态】${boundary.startingState}\n`
+    prompt += `   起点：${boundary.startingState}\n`
   }
   if (boundary.endingState) {
-    prompt += `🎯【目标状态】${boundary.endingState}\n`
+    prompt += `   终点：${boundary.endingState}\n`
   }
+  prompt += '   ⚠️ 本卷结束时，主角应该完成本卷任务，但尚未开始下一卷的旅程！\n\n'
 
-  prompt += '\n⚠️ 每一章大纲都会被系统自动检测，如果违反上述约束将被标记为错误！\n'
+  // 章节分布指引
+  prompt += '📊【章节进度规划 - 重要】\n'
+  prompt += '   请按以下比例规划本卷章节（以40章为例）：\n'
+  prompt += '   • 第1-4章（10%）：开篇，建立本卷起点，承接上一卷\n'
+  prompt += '   • 第5-16章（30%）：发展，展开本卷主线冲突\n'
+  prompt += '   • 第17-32章（40%）：高潮，本卷核心事件的爆发与解决\n'
+  prompt += '   • 第33-40章（20%）：收尾，总结本卷，为下一卷埋伏笔（但不开始！）\n'
+  prompt += '\n'
+  prompt += '   🚫 常见错误：\n'
+  prompt += '   • 在第30章就开始写下一卷的内容 → 错误！\n'
+  prompt += '   • 本卷最后几章主角已经进入下一卷的场景 → 错误！\n'
+  prompt += '   • 本卷结尾主角已经开始下一卷的任务 → 错误！\n\n'
+
+  prompt += '⚠️⚠️⚠️ 每一章大纲都会被系统自动检测，违反边界约束将被标记为错误！⚠️⚠️⚠️\n'
 
   return prompt
 }

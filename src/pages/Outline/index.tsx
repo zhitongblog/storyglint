@@ -350,16 +350,25 @@ function Outline() {
         previousVolumeSummary = previousVolume.summary
       }
 
-      // 获取下一卷的信息（避免提前写）
+      // 获取下一卷的信息（避免提前写）- 这是防止越界的关键
       const nextVolumeSummary = nextVolume ? nextVolume.summary : ''
+      // 同时检查 keyEvents 和 keyPoints（两者可能都存在）
+      const nextVolumeKeyEvents = nextVolume
+        ? ((nextVolume as any).keyEvents || (nextVolume as any).keyPoints || [])
+        : []
       const nextVolumeDetails = nextVolume
         ? {
             title: nextVolume.title,
             summary: nextVolume.summary,
             mainPlot: (nextVolume as any).mainPlot || '',
-            keyEvents: (nextVolume as any).keyEvents || []
+            keyEvents: nextVolumeKeyEvents
           }
         : null
+
+      console.log('🔒 [大纲生成] 下一卷边界信息:', nextVolumeDetails
+        ? `《${nextVolumeDetails.title}》关键事件: ${nextVolumeKeyEvents.length}个`
+        : '无下一卷'
+      )
 
       // 收集本卷已写内容的摘要（追加生成时使用）
       const writtenChaptersSummary = existingChapters.length > 0
@@ -406,7 +415,7 @@ function Outline() {
 
         console.log(`📊 [大纲生成] 章节编号: 从第 ${startChapterNumber} 章开始，共生成 ${generateChapterCount} 章`)
 
-        // 准备扩展上下文信息（避免重复）
+        // 准备扩展上下文信息（避免重复，包含边界约束所需参数）
         const extendedContext = {
           writtenSummary: writtenChaptersSummary.length > 0
             ? writtenChaptersSummary.slice(-2).join('；')  // 只传递最后2章的摘要
@@ -418,11 +427,13 @@ function Outline() {
           nextVolumeInfo: nextVolumeDetails
             ? `${nextVolumeDetails.title}: ${nextVolumeDetails.summary}`
             : undefined,
+          nextVolumeTitle: nextVolume?.title,  // 下一卷标题（重要边界标识）
           characterInfo: characterArchives
             .filter(c => c.status === 'active')
             .slice(0, 5)
             .map(c => `${c.name}(${c.identity})`)
-            .join('、')
+            .join('、'),
+          volumeTitle: volume.title  // 当前卷标题
         }
 
         console.log('🤖 [大纲生成] 开始调用 API（逐章模式）...')

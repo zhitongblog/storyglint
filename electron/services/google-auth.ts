@@ -48,6 +48,18 @@ export class GoogleAuthService {
   }
 
   /**
+   * 验证 URL 是否有效
+   */
+  private isValidUrl(urlString: string): boolean {
+    try {
+      new URL(urlString)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * 配置代理
    */
   private setupProxy() {
@@ -57,26 +69,36 @@ export class GoogleAuthService {
     console.log('[GoogleAuth] 代理配置 - 启用:', proxyEnabled, '地址:', proxyUrl || '(系统代理)')
 
     if (proxyEnabled) {
-      if (proxyUrl) {
-        // 使用手动配置的代理
-        console.log('[GoogleAuth] 配置手动代理:', proxyUrl)
-        this.proxyAgent = new HttpsProxyAgent(proxyUrl)
+      try {
+        if (proxyUrl && this.isValidUrl(proxyUrl)) {
+          // 使用手动配置的代理
+          console.log('[GoogleAuth] 配置手动代理:', proxyUrl)
+          this.proxyAgent = new HttpsProxyAgent(proxyUrl)
 
-        // 设置环境变量（作为备用）
-        process.env.HTTP_PROXY = proxyUrl
-        process.env.HTTPS_PROXY = proxyUrl
-      } else {
-        // 使用系统代理
-        console.log('[GoogleAuth] 尝试使用系统代理')
-        // 检查系统环境变量
-        const systemProxy = process.env.HTTP_PROXY || process.env.HTTPS_PROXY ||
-                           process.env.http_proxy || process.env.https_proxy
-        if (systemProxy) {
-          console.log('[GoogleAuth] 发现系统代理:', systemProxy)
-          this.proxyAgent = new HttpsProxyAgent(systemProxy)
+          // 设置环境变量（作为备用）
+          process.env.HTTP_PROXY = proxyUrl
+          process.env.HTTPS_PROXY = proxyUrl
+        } else if (proxyUrl) {
+          // 代理 URL 无效
+          console.warn('[GoogleAuth] 代理 URL 无效:', proxyUrl)
         } else {
-          console.log('[GoogleAuth] 未发现系统代理环境变量')
+          // 使用系统代理
+          console.log('[GoogleAuth] 尝试使用系统代理')
+          // 检查系统环境变量
+          const systemProxy = process.env.HTTP_PROXY || process.env.HTTPS_PROXY ||
+                             process.env.http_proxy || process.env.https_proxy
+          if (systemProxy && this.isValidUrl(systemProxy)) {
+            console.log('[GoogleAuth] 发现系统代理:', systemProxy)
+            this.proxyAgent = new HttpsProxyAgent(systemProxy)
+          } else if (systemProxy) {
+            console.warn('[GoogleAuth] 系统代理 URL 无效:', systemProxy)
+          } else {
+            console.log('[GoogleAuth] 未发现系统代理环境变量')
+          }
         }
+      } catch (error) {
+        console.error('[GoogleAuth] 配置代理失败:', error)
+        this.proxyAgent = null
       }
     } else {
       console.log('[GoogleAuth] 代理未启用')

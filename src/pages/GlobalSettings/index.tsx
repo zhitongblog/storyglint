@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Input, Button, message, Space, Alert, Switch, Select, Badge, Slider, Tooltip, Tag, Modal } from 'antd'
+import { Card, Input, Button, message, Space, Alert, Switch, Select, Badge, Slider, Tooltip, Tag, Modal, Segmented } from 'antd'
 import {
   SaveOutlined,
   KeyOutlined,
@@ -15,17 +15,20 @@ import {
   UserOutlined,
   ExclamationCircleOutlined,
   GoogleOutlined,
-  BgColorsOutlined
+  BgColorsOutlined,
+  RobotOutlined
 } from '@ant-design/icons'
 import {
-  initGemini,
+  initAI,
   checkQuota,
   findAvailableModel,
   switchModel,
-  getCurrentModelName,
-  AVAILABLE_MODELS,
-  type QuotaInfo
-} from '../../services/gemini'
+  getAllModels,
+  setProvider,
+  getProvidersByRegion,
+  PROVIDER_INFO
+} from '../../services/ai'
+import type { QuotaInfo, ProviderType } from '../../services/ai'
 import type { ServerUser } from '../../types'
 import { ErrorDisplay, parseError, type ErrorInfo } from '../../components/ErrorDisplay'
 
@@ -69,10 +72,21 @@ const THEME_OPTIONS = [
   }
 ]
 
+// 区域筛选选项
+const REGION_OPTIONS = [
+  { label: '全部', value: 'all' },
+  { label: '🌍 国际', value: 'global' },
+  { label: '🇨🇳 中国', value: 'china' }
+]
+
 function GlobalSettings() {
-  const [geminiApiKey, setGeminiApiKey] = useState('')
+  // AI 提供商配置
+  const [selectedProvider, setSelectedProvider] = useState<ProviderType>('gemini')
+  const [regionFilter, setRegionFilter] = useState<'all' | 'global' | 'china'>('all')
+  const [providerConfigs, setProviderConfigs] = useState<Record<string, { apiKey: string; model: string }>>({})
+  const [currentApiKey, setCurrentApiKey] = useState('')
   const [isKeyModified, setIsKeyModified] = useState(false)
-  const [geminiConfigured, setGeminiConfigured] = useState(false)
+  const [aiConfigured, setAiConfigured] = useState(false)
 
   // 代理配置
   const [proxyEnabled, setProxyEnabled] = useState(false)
@@ -82,7 +96,7 @@ function GlobalSettings() {
   // 配额和模型配置
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null)
   const [isCheckingQuota, setIsCheckingQuota] = useState(false)
-  const [selectedModel, setSelectedModel] = useState<string>(getCurrentModelName())
+  const [selectedModel, setSelectedModel] = useState<string>('')
   const [isSwitchingModel, setIsSwitchingModel] = useState(false)
 
   // 自动更新配置
@@ -91,7 +105,7 @@ function GlobalSettings() {
   const [characterInterval, setCharacterInterval] = useState(30)
 
   // 错误显示状态
-  const [geminiError, setGeminiError] = useState<ErrorInfo | null>(null)
+  const [aiError, setAiError] = useState<ErrorInfo | null>(null)
 
   // 主题配置
   const [currentTheme, setCurrentTheme] = useState('dark-blue')
@@ -106,28 +120,71 @@ function GlobalSettings() {
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'success' | 'error'>('unknown')
 
+  // 获取当前提供商的可用模型
+  const currentProviderModels = getAllModels()[selectedProvider] || {}
+
+  // 获取筛选后的提供商列表
+  const getFilteredProviders = (): ProviderType[] => {
+    if (regionFilter === 'all') {
+      return [...getProvidersByRegion('global'), ...getProvidersByRegion('china')]
+    }
+    return getProvidersByRegion(regionFilter)
+  }
+
   // 加载保存的配置
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const apiKey = await window.electron.settings.get('geminiApiKey')
+        // 加载 AI 提供商配置
+        const savedProvider = await window.electron.settings.get('aiProvider')
+        const savedProviderConfigs = await window.electron.settings.get('aiProviderConfigs')
+
+        if (savedProviderConfigs) {
+          setProviderConfigs(savedProviderConfigs as Record<string, { apiKey: string; model: string }>)
+        }
+
+        // 设置当前提供商
+        if (savedProvider && savedProvider in PROVIDER_INFO) {
+          setSelectedProvider(savedProvider as ProviderType)
+          setProvider(savedProvider as ProviderType)
+
+          const config = (savedProviderConfigs as Record<string, { apiKey: string; model: string }>)?.[savedProvider as string]
+          if (config?.apiKey) {
+            setCurrentApiKey(maskKey(config.apiKey))
+            setAiConfigured(true)
+            if (config.model) {
+              setSelectedModel(config.model)
+            }
+            // 初始化 AI
+            await initAI(config.apiKey, config.model)
+            // 自动检查配额
+            setTimeout(() => handleCheckQuota(), 500)
+          }
+        } else {
+          // 向后兼容：从旧的 geminiApiKey 迁移
+          const oldApiKey = await window.electron.settings.get('geminiApiKey')
+          const oldModel = await window.electron.settings.get('geminiModel')
+          if (oldApiKey) {
+            const newConfigs = {
+              gemini: { apiKey: oldApiKey as string, model: (oldModel as string) || 'gemini-3-flash-preview' }
+            }
+            setProviderConfigs(newConfigs)
+            setCurrentApiKey(maskKey(oldApiKey as string))
+            setAiConfigured(true)
+            if (oldModel) {
+              setSelectedModel(oldModel as string)
+            }
+            await initAI(oldApiKey as string, oldModel as string)
+            // 保存迁移后的配置
+            await window.electron.settings.set('aiProvider', 'gemini')
+            await window.electron.settings.set('aiProviderConfigs', newConfigs)
+            setTimeout(() => handleCheckQuota(), 500)
+          }
+        }
+
+        // 加载代理配置
         const proxyEnabledValue = await window.electron.settings.get('proxyEnabled')
         const proxyUrlValue = await window.electron.settings.get('proxyUrl')
-        const savedModel = await window.electron.settings.get('geminiModel')
-
-        if (apiKey) {
-          setGeminiApiKey(maskKey(apiKey))
-          setGeminiConfigured(true)
-          // 初始化时使用保存的模型
-          if (savedModel && savedModel in AVAILABLE_MODELS) {
-            setSelectedModel(savedModel as string)
-            await initGemini(apiKey, savedModel as string)
-          } else {
-            await initGemini(apiKey)
-          }
-          // 自动检查配额
-          setTimeout(() => handleCheckQuota(), 500)
-        }
         if (proxyEnabledValue !== undefined) {
           setProxyEnabled(proxyEnabledValue as boolean)
         }
@@ -156,7 +213,6 @@ function GlobalSettings() {
           setCurrentTheme(savedTheme as string)
           document.documentElement.setAttribute('data-theme', savedTheme as string)
         } else {
-          // 默认主题
           document.documentElement.setAttribute('data-theme', 'dark-blue')
         }
 
@@ -167,7 +223,6 @@ function GlobalSettings() {
             setServerUrl(savedServerUrl)
           }
 
-          // 检查服务端登录状态
           const loggedIn = await window.electron.serverAuth.isLoggedIn()
           setIsServerLoggedIn(loggedIn)
 
@@ -191,32 +246,70 @@ function GlobalSettings() {
     return key.slice(0, 6) + '••••••••' + key.slice(-4)
   }
 
-  // 保存 Gemini API Key
-  const handleSaveGeminiKey = async () => {
-    // 如果已配置且未修改，静默返回（不显示提示）
-    if (!isKeyModified && geminiConfigured) {
+  // 切换 AI 提供商
+  const handleProviderChange = async (provider: ProviderType) => {
+    setSelectedProvider(provider)
+    setProvider(provider)
+    setQuotaInfo(null)
+    setAiError(null)
+
+    // 加载该提供商的配置
+    const config = providerConfigs[provider]
+    if (config?.apiKey) {
+      setCurrentApiKey(maskKey(config.apiKey))
+      setAiConfigured(true)
+      setSelectedModel(config.model || Object.keys(currentProviderModels)[0] || '')
+      await initAI(config.apiKey, config.model)
+      // 自动检查配额
+      handleCheckQuota()
+    } else {
+      setCurrentApiKey('')
+      setAiConfigured(false)
+      // 设置默认模型
+      const models = getAllModels()[provider]
+      const recommendedModel = Object.entries(models).find(([_, info]) => info.recommended)?.[0]
+      setSelectedModel(recommendedModel || Object.keys(models)[0] || '')
+    }
+
+    // 保存选择的提供商
+    await window.electron.settings.set('aiProvider', provider)
+    setIsKeyModified(false)
+  }
+
+  // 保存 API Key
+  const handleSaveApiKey = async () => {
+    if (!isKeyModified && aiConfigured) {
       return
     }
 
-    // 如果是遮蔽后的 key（包含 ••••），说明用户没有真正修改
-    if (geminiApiKey.includes('••••')) {
+    if (currentApiKey.includes('••••')) {
       return
     }
 
-    if (!geminiApiKey.trim()) {
+    if (!currentApiKey.trim()) {
       message.warning('请输入 API Key')
       return
     }
 
     try {
-      await window.electron.settings.set('geminiApiKey', geminiApiKey)
-      const success = await initGemini(geminiApiKey, selectedModel)
+      // 更新提供商配置
+      const newConfigs = {
+        ...providerConfigs,
+        [selectedProvider]: {
+          apiKey: currentApiKey,
+          model: selectedModel
+        }
+      }
+      setProviderConfigs(newConfigs)
+      await window.electron.settings.set('aiProviderConfigs', newConfigs)
+
+      // 初始化 AI
+      const success = await initAI(currentApiKey, selectedModel)
       if (success) {
-        message.success('Gemini API Key 已保存并验证成功')
-        setGeminiConfigured(true)
+        message.success(`${PROVIDER_INFO[selectedProvider].name} API Key 已保存并验证成功`)
+        setAiConfigured(true)
         setIsKeyModified(false)
-        setGeminiApiKey(maskKey(geminiApiKey))
-        // 自动检查配额
+        setCurrentApiKey(maskKey(currentApiKey))
         handleCheckQuota()
       } else {
         message.warning('API Key 已保存，但验证失败，请检查是否正确')
@@ -228,13 +321,13 @@ function GlobalSettings() {
 
   // 检查配额
   const handleCheckQuota = async () => {
-    if (!geminiConfigured) {
+    if (!aiConfigured) {
       message.warning('请先配置并保存 API Key')
       return
     }
 
     setIsCheckingQuota(true)
-    setGeminiError(null)
+    setAiError(null)
     try {
       const info = await checkQuota()
       setQuotaInfo(info)
@@ -247,18 +340,18 @@ function GlobalSettings() {
         error.suggestions = [
           '等待配额重置（通常每24小时重置一次）',
           '使用新的 API Key',
-          '点击"查找可用模型"尝试切换到其他模型'
+          selectedProvider === 'gemini' ? '点击"查找可用模型"尝试切换到其他模型' : '尝试切换到其他模型'
         ]
-        setGeminiError(error)
+        setAiError(error)
       } else {
         const error = parseError(info.error || 'API 验证失败')
         error.title = 'API 验证失败'
-        setGeminiError(error)
+        setAiError(error)
       }
     } catch (error: any) {
       const parsedError = parseError(error)
-      parsedError.title = 'Gemini API 检查失败'
-      setGeminiError(parsedError)
+      parsedError.title = `${PROVIDER_INFO[selectedProvider].name} API 检查失败`
+      setAiError(parsedError)
       setQuotaInfo({
         isValid: false,
         model: selectedModel,
@@ -269,15 +362,15 @@ function GlobalSettings() {
     }
   }
 
-  // 查找可用模型
+  // 查找可用模型（仅 Gemini）
   const handleFindAvailableModel = async () => {
-    if (!geminiConfigured) {
+    if (!aiConfigured) {
       message.warning('请先配置并保存 API Key')
       return
     }
 
     setIsCheckingQuota(true)
-    setGeminiError(null)
+    setAiError(null)
     const hideLoading = message.loading('正在测试所有模型...', 0)
 
     try {
@@ -307,7 +400,7 @@ function GlobalSettings() {
           ],
           timestamp: new Date()
         }
-        setGeminiError(error)
+        setAiError(error)
       }
 
       console.log('Model test results:', results)
@@ -315,7 +408,7 @@ function GlobalSettings() {
       hideLoading()
       const parsedError = parseError(error)
       parsedError.title = '模型测试失败'
-      setGeminiError(parsedError)
+      setAiError(parsedError)
     } finally {
       setIsCheckingQuota(false)
     }
@@ -323,18 +416,28 @@ function GlobalSettings() {
 
   // 切换模型
   const handleSwitchModel = async (modelName: string) => {
-    if (!geminiConfigured) {
+    if (!aiConfigured) {
       message.warning('请先配置并保存 API Key')
       return
     }
 
     setIsSwitchingModel(true)
     try {
-      await switchModel(modelName as keyof typeof AVAILABLE_MODELS)
-      await window.electron.settings.set('geminiModel', modelName)
+      await switchModel(modelName)
+
+      // 更新提供商配置中的模型
+      const newConfigs = {
+        ...providerConfigs,
+        [selectedProvider]: {
+          ...providerConfigs[selectedProvider],
+          model: modelName
+        }
+      }
+      setProviderConfigs(newConfigs)
+      await window.electron.settings.set('aiProviderConfigs', newConfigs)
+
       setSelectedModel(modelName)
       message.success(`已切换到模型: ${modelName}`)
-      // 切换后自动检查配额
       handleCheckQuota()
     } catch (error: any) {
       message.error(`切换失败: ${error.message || String(error)}`)
@@ -384,7 +487,7 @@ function GlobalSettings() {
     }
   }
 
-  // 测试服务端连接（通过主进程）
+  // 测试服务端连接
   const handleTestConnection = async () => {
     setIsTestingConnection(true)
     setConnectionStatus('unknown')
@@ -415,7 +518,6 @@ function GlobalSettings() {
     }
 
     try {
-      // 验证 URL 格式
       new URL(serverUrl)
     } catch {
       message.error('请输入有效的 URL 地址')
@@ -426,7 +528,6 @@ function GlobalSettings() {
       await window.electron.serverAuth.setServerUrl(serverUrl.trim())
       message.success('服务端地址已保存')
       setIsServerUrlModified(false)
-      // 保存后自动测试连接
       handleTestConnection()
     } catch (error) {
       message.error('保存失败')
@@ -521,23 +622,23 @@ function GlobalSettings() {
 
   return (
     <div className="p-6 fade-in max-w-4xl mx-auto">
-      {/* Gemini API 错误弹窗 */}
+      {/* AI 错误弹窗 */}
       <Modal
-        open={!!geminiError}
-        onCancel={() => setGeminiError(null)}
+        open={!!aiError}
+        onCancel={() => setAiError(null)}
         footer={null}
         width={600}
         centered
         destroyOnClose
       >
-        {geminiError && (
+        {aiError && (
           <ErrorDisplay
-            error={geminiError}
+            error={aiError}
             onRetry={() => {
-              setGeminiError(null)
+              setAiError(null)
               handleCheckQuota()
             }}
-            onDismiss={() => setGeminiError(null)}
+            onDismiss={() => setAiError(null)}
             retryText="重新检查"
             dismissText="关闭"
           />
@@ -547,16 +648,16 @@ function GlobalSettings() {
       {/* 头部 */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-dark-text mb-1">全局设置</h1>
-        <p className="text-dark-muted">配置 API 密钥和账户登录</p>
+        <p className="text-dark-muted">配置 AI 服务、API 密钥和账户登录</p>
       </div>
 
-      {/* Gemini API 配置 - 放在最顶部方便配置 */}
+      {/* AI 提供商配置 */}
       <Card
         title={
           <Space>
-            <KeyOutlined className="text-purple-500" />
-            <span>Gemini API 配置</span>
-            {geminiConfigured && quotaInfo?.isValid && !quotaInfo.quotaExceeded && (
+            <RobotOutlined className="text-purple-500" />
+            <span>AI 服务配置</span>
+            {aiConfigured && quotaInfo?.isValid && !quotaInfo.quotaExceeded && (
               <CheckCircleOutlined className="text-green-500" />
             )}
             {quotaInfo?.quotaExceeded && (
@@ -568,12 +669,50 @@ function GlobalSettings() {
         style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
       >
         <Alert
-          message="Gemini API 用于 AI 写作功能"
-          description="配置 API Key 后可使用 AI 生成大纲、角色设定、自动续写等功能。推荐使用 Gemini 2.0 Flash 模型。"
+          message="选择 AI 服务提供商"
+          description="不同地区可选择不同的 AI 服务。国际用户推荐 Gemini、OpenAI 或 Claude；中国用户推荐 DeepSeek、通义千问或 Kimi。"
           type="info"
           showIcon
           className="mb-4"
         />
+
+        {/* 区域筛选 */}
+        <div className="mb-4">
+          <label className="block text-dark-text mb-2">区域筛选</label>
+          <Segmented
+            options={REGION_OPTIONS}
+            value={regionFilter}
+            onChange={(value) => setRegionFilter(value as 'all' | 'global' | 'china')}
+          />
+        </div>
+
+        {/* 提供商选择 */}
+        <div className="mb-4">
+          <label className="block text-dark-text mb-2">
+            <Space>
+              <ApiOutlined />
+              选择 AI 提供商
+            </Space>
+          </label>
+          <Select
+            value={selectedProvider}
+            onChange={handleProviderChange}
+            className="w-full"
+            options={getFilteredProviders().map(p => ({
+              label: (
+                <Space>
+                  {PROVIDER_INFO[p].region === 'china' ? '🇨🇳' : '🌍'}
+                  {PROVIDER_INFO[p].name}
+                </Space>
+              ),
+              value: p,
+              title: PROVIDER_INFO[p].description
+            }))}
+          />
+          <div className="text-dark-muted text-xs mt-1">
+            {PROVIDER_INFO[selectedProvider].description}
+          </div>
+        </div>
 
         {/* 配额状态显示 */}
         {quotaInfo && (
@@ -600,9 +739,9 @@ function GlobalSettings() {
                       <li>等待配额重置（通常每24小时重置一次）</li>
                       <li>使用新的 API Key（<a href="#" className="text-primary-400" onClick={(e) => {
                         e.preventDefault()
-                        window.electron.system.openExternal('https://aistudio.google.com/apikey')
+                        window.electron.system.openExternal(PROVIDER_INFO[selectedProvider].apiKeyUrl)
                       }}>获取新 Key</a>）</li>
-                      <li>点击下方"查找可用模型"尝试切换到其他模型</li>
+                      {selectedProvider === 'gemini' && <li>点击下方"查找可用模型"尝试切换到其他模型</li>}
                     </ol>
                   </div>
                 )}
@@ -621,7 +760,7 @@ function GlobalSettings() {
               <Space>
                 <ThunderboltOutlined />
                 选择模型
-                {AVAILABLE_MODELS[selectedModel as keyof typeof AVAILABLE_MODELS]?.recommended && (
+                {currentProviderModels[selectedModel]?.recommended && (
                   <Badge color="green" text="推荐" />
                 )}
               </Space>
@@ -630,9 +769,9 @@ function GlobalSettings() {
               value={selectedModel}
               onChange={handleSwitchModel}
               loading={isSwitchingModel}
-              disabled={!geminiConfigured}
+              disabled={!aiConfigured}
               className="w-full"
-              options={Object.entries(AVAILABLE_MODELS).map(([key, value]) => ({
+              options={Object.entries(currentProviderModels).map(([key, value]) => ({
                 label: (
                   <Space>
                     {value.name}
@@ -644,19 +783,24 @@ function GlobalSettings() {
               }))}
             />
             <div className="text-dark-muted text-xs mt-1">
-              {AVAILABLE_MODELS[selectedModel as keyof typeof AVAILABLE_MODELS]?.description}
+              {currentProviderModels[selectedModel]?.description}
             </div>
           </div>
 
           {/* API Key 输入 */}
           <div>
-            <label className="block text-dark-text mb-2">API Key</label>
+            <label className="block text-dark-text mb-2">
+              <Space>
+                <KeyOutlined />
+                {PROVIDER_INFO[selectedProvider].name} API Key
+              </Space>
+            </label>
             <div className="flex gap-2">
               <Input.Password
-                placeholder="输入 Gemini API Key"
-                value={geminiApiKey}
+                placeholder={`输入 ${PROVIDER_INFO[selectedProvider].name} API Key`}
+                value={currentApiKey}
                 onChange={(e) => {
-                  setGeminiApiKey(e.target.value)
+                  setCurrentApiKey(e.target.value)
                   setIsKeyModified(true)
                 }}
                 className="flex-1"
@@ -664,7 +808,7 @@ function GlobalSettings() {
               <Button
                 type="primary"
                 icon={<SaveOutlined />}
-                onClick={handleSaveGeminiKey}
+                onClick={handleSaveApiKey}
               >
                 保存并验证
               </Button>
@@ -672,7 +816,7 @@ function GlobalSettings() {
           </div>
 
           {/* 配额检查按钮 */}
-          {geminiConfigured && (
+          {aiConfigured && (
             <Space wrap>
               <Button
                 icon={<ReloadOutlined spin={isCheckingQuota} />}
@@ -681,13 +825,15 @@ function GlobalSettings() {
               >
                 检查配额
               </Button>
-              <Button
-                icon={<ThunderboltOutlined />}
-                onClick={handleFindAvailableModel}
-                loading={isCheckingQuota}
-              >
-                查找可用模型
-              </Button>
+              {selectedProvider === 'gemini' && (
+                <Button
+                  icon={<ThunderboltOutlined />}
+                  onClick={handleFindAvailableModel}
+                  loading={isCheckingQuota}
+                >
+                  查找可用模型
+                </Button>
+              )}
             </Space>
           )}
 
@@ -697,12 +843,10 @@ function GlobalSettings() {
               className="text-primary-400"
               onClick={(e) => {
                 e.preventDefault()
-                window.electron.system.openExternal(
-                  'https://aistudio.google.com/app/apikey'
-                )
+                window.electron.system.openExternal(PROVIDER_INFO[selectedProvider].apiKeyUrl)
               }}
             >
-              获取 Gemini API Key →
+              获取 {PROVIDER_INFO[selectedProvider].name} API Key →
             </a>
             {' | '}
             <a
@@ -710,12 +854,10 @@ function GlobalSettings() {
               className="text-primary-400"
               onClick={(e) => {
                 e.preventDefault()
-                window.electron.system.openExternal(
-                  'https://ai.google.dev/gemini-api/docs/models/gemini'
-                )
+                window.electron.system.openExternal(PROVIDER_INFO[selectedProvider].website)
               }}
             >
-              查看模型文档 →
+              访问官网 →
             </a>
           </div>
         </div>
@@ -757,7 +899,6 @@ function GlobalSettings() {
                 background: theme.colors[0]
               }}
             >
-              {/* 颜色预览条 */}
               <div className="flex gap-1 mb-3">
                 {theme.colors.map((color, idx) => (
                   <div
@@ -768,7 +909,6 @@ function GlobalSettings() {
                 ))}
               </div>
 
-              {/* 主题名称 */}
               <div className="flex items-center justify-between">
                 <span
                   className="font-medium"
@@ -781,7 +921,6 @@ function GlobalSettings() {
                 )}
               </div>
 
-              {/* 主题描述 */}
               <div
                 className="text-xs mt-1"
                 style={{ color: theme.key === 'light' ? '#64748b' : '#9ca3af' }}
@@ -1048,10 +1187,10 @@ function GlobalSettings() {
         style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
       >
         <Alert
-          message="重要提示：访问 Google 服务需要配置代理"
+          message="重要提示：访问国际 AI 服务需要配置代理"
           description={
             <div className="space-y-2 mt-2">
-              <p>如果你在中国大陆，需要配置代理才能正常使用 Google 登录和云同步功能。</p>
+              <p>如果你在中国大陆使用 Gemini、OpenAI 或 Claude，需要配置代理才能正常访问。使用国内提供商（DeepSeek、通义千问、Kimi）则无需代理。</p>
               <p><strong>推荐配置：</strong></p>
               <ol className="list-decimal list-inside space-y-1">
                 <li><strong>使用系统代理</strong>：启用代理，代理地址留空，应用会自动使用系统代理设置</li>
@@ -1069,7 +1208,7 @@ function GlobalSettings() {
             <div>
               <div className="text-dark-text font-medium mb-1">启用代理</div>
               <div className="text-dark-muted text-sm">
-                开启后可访问 Google 服务（需要重启应用）
+                开启后可访问国际 AI 服务（需要重启应用）
               </div>
             </div>
             <Switch

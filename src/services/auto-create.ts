@@ -399,27 +399,44 @@ function buildVolumeChaptersPrompt(
       contextSection += `- 可以承接上一卷的结果，但不能重新讲述上一卷的内容\n`
     }
 
-    // 下一卷的信息（未来的内容，不可提前写）
+    // 下一卷的信息（未来的内容，不可提前写）- 这是最关键的边界约束
     if (contextInfo.nextVolumeDetails) {
       const next = contextInfo.nextVolumeDetails
-      contextSection += `\n【⛔ 下一卷内容预告】（第${volumeIndex + 2}卷，属于未来，不可提前写）\n`
-      contextSection += `卷名：${next.title}\n`
-      contextSection += `剧情：${next.summary}\n`
+      contextSection += `\n╔══════════════════════════════════════════════════════════════╗\n`
+      contextSection += `║  🚨🚨🚨【下一卷边界 - 绝对禁止提前写】🚨🚨🚨                    ║\n`
+      contextSection += `╚══════════════════════════════════════════════════════════════╝\n`
+      contextSection += `📕 下一卷：第${volumeIndex + 2}卷《${next.title}》\n`
+      contextSection += `📝 下一卷剧情：${next.summary}\n`
       if (next.mainPlot) {
-        contextSection += `主线：${next.mainPlot}\n`
+        contextSection += `🎬 下一卷主线：${next.mainPlot}\n`
       }
       if (next.keyEvents && next.keyEvents.length > 0) {
-        contextSection += `关键事件：${next.keyEvents.join('、')}\n`
+        contextSection += `🔑 下一卷关键事件（本卷绝对不能写）：\n`
+        next.keyEvents.forEach((event: string, i: number) => {
+          contextSection += `   ⛔ ${i + 1}. ${event}\n`
+        })
       }
-      contextSection += '\n🚫 严格禁止：\n'
-      contextSection += `- 不得提前写下一卷（第${volumeIndex + 2}卷）的内容\n`
-      contextSection += `- 下一卷的关键事件、冲突、转折不能在本卷出现\n`
-      contextSection += `- 本卷只能为下一卷埋伏笔，不能直接写出下一卷的剧情\n`
+      contextSection += '\n'
+      contextSection += '🔴🔴🔴 本卷与下一卷的边界红线 🔴🔴🔴\n'
+      contextSection += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+      contextSection += `✅ 本卷结束时的正确状态：\n`
+      contextSection += `   - 完成本卷《${volume.title}》的核心任务\n`
+      contextSection += `   - 留下悬念或伏笔，暗示下一卷的方向\n`
+      contextSection += `   - 主角仍处于本卷的场景/状态中\n`
+      contextSection += '\n'
+      contextSection += `❌ 绝对禁止（违反即失败）：\n`
+      contextSection += `   - 主角进入《${next.title}》的场景或状态\n`
+      contextSection += `   - 开始处理下一卷的核心冲突\n`
+      contextSection += `   - 触发下一卷的关键事件\n`
+      contextSection += `   - 本卷最后几章的内容属于下一卷\n`
+      contextSection += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
     } else if (contextInfo.nextVolumeSummary && contextInfo.nextVolumeSummary.trim()) {
       // 兼容旧的 nextVolumeSummary
-      contextSection += `\n【⛔ 下一卷内容预告】（第${volumeIndex + 2}卷，属于未来，不可提前写）\n`
-      contextSection += contextInfo.nextVolumeSummary
-      contextSection += '\n🚫 严格禁止：下一卷的内容不要在本卷中提前写出！\n'
+      contextSection += `\n╔══════════════════════════════════════════════════════════════╗\n`
+      contextSection += `║  🚨🚨🚨【下一卷边界 - 绝对禁止提前写】🚨🚨🚨                    ║\n`
+      contextSection += `╚══════════════════════════════════════════════════════════════╝\n`
+      contextSection += `下一卷（第${volumeIndex + 2}卷）：${contextInfo.nextVolumeSummary}\n`
+      contextSection += '\n🔴 绝对禁止：本卷最后几章不能开始写下一卷的内容！\n'
     }
 
     contextSection += `\n【✅ 当前卷任务】（第${volumeIndex + 1}卷，这是你要生成的）\n`
@@ -453,9 +470,20 @@ function buildVolumeChaptersPrompt(
     }
   }
 
+  // 计算章节分布建议
+  const phase1End = Math.floor(chapterCount * 0.1)  // 开篇 10%
+  const phase2End = Math.floor(chapterCount * 0.4)  // 发展 30% (累计40%)
+  const phase3End = Math.floor(chapterCount * 0.8)  // 高潮 40% (累计80%)
+  // 收尾 20% (剩余)
+
   return `你是一个顶级的网文主编兼金牌编剧。
 
 请为以下卷生成详细的章节大纲。
+
+╔══════════════════════════════════════════════════════════════╗
+║  【🎯 核心任务】为第${volumeIndex + 1}卷生成 ${chapterCount} 章大纲                    ║
+║  【⚠️ 重要】这 ${chapterCount} 章只覆盖本卷内容，不要写下一卷的任何内容！   ║
+╚══════════════════════════════════════════════════════════════╝
 
 【世界观概要】
 ${worldSetting.slice(0, 800)}
@@ -464,11 +492,19 @@ ${worldSetting.slice(0, 800)}
 ${characterInfo}${deceasedWarning}
 
 【当前卷信息】
-- 卷号：第${volumeIndex}卷（共${totalVolumes}卷）
-- 卷名：${volume.title}
-- 剧情概述：${volume.summary}
-${volume.mainPlot ? `- 主线剧情：${volume.mainPlot}` : ''}
-${volume.keyEvents ? `- 关键事件：${volume.keyEvents.join('、')}` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📖 卷号：第${volumeIndex + 1}卷（共${totalVolumes}卷）
+📗 卷名：${volume.title}
+📝 本卷剧情范围：${volume.summary}
+${volume.mainPlot ? `🎬 主线剧情：${volume.mainPlot}` : ''}
+${volume.keyEvents ? `🔑 本卷关键事件：${volume.keyEvents.join('、')}` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚨🚨🚨【本卷边界 - 极其重要】🚨🚨🚨
+• 本卷只讲述"${volume.title}"的故事
+• 这 ${chapterCount} 章的全部内容必须在本卷的剧情范围内
+• 本卷结束时 = 本卷任务完成，但下一卷尚未开始
+• 最后几章是"为下一卷埋伏笔"，绝不是"开始下一卷"
 ${contextSection}
 ${guidanceSection}
 【题材】${genres.join('、') || '未指定'}
@@ -484,7 +520,22 @@ ${guidanceSection}
 5. 章节之间要有逻辑连贯性
 6. 注意角色的生死状态和人物关系，已故角色不应再出场
 
-🎯【网文节奏控制 - 极其重要】：
+🎯【本卷章节进度规划 - 必须遵守】：
+本卷 ${chapterCount} 章的剧情分布（以"${volume.title}"为主线）：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📍 第1-${phase1End}章【开篇10%】：建立本卷起点，承接上一卷结尾
+📍 第${phase1End + 1}-${phase2End}章【发展30%】：展开本卷主线冲突，逐步升级
+📍 第${phase2End + 1}-${phase3End}章【高潮40%】：本卷核心事件的爆发与解决
+📍 第${phase3End + 1}-${chapterCount}章【收尾20%】：总结本卷，为下一卷埋伏笔
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 收尾阶段（最后${chapterCount - phase3End}章）注意：
+   • ✅ 正确：本卷任务完成，主角获得成长，留下悬念
+   • ✅ 正确：暗示下一卷的危机，但不触发
+   • ❌ 错误：主角已经进入下一卷的场景
+   • ❌ 错误：开始处理下一卷的核心冲突
+   • ❌ 错误：本卷最后几章的内容属于下一卷
+
+🎯【网文节奏控制】：
 7. 【章节类型分配】必须按以下比例分配章节类型（${chapterCount}章约等于）：
    - 铺垫章（30%）：日常修炼、人物互动、环境描写、伏笔埋设、情报收集
    - 发展章（40%）：小冲突、小试炼、关系推进、势力交锋、线索展开
@@ -502,12 +553,15 @@ ${guidanceSection}
     - 每卷至少埋3-5个伏笔，留待后续卷揭示
     - 本卷结尾要留下新的疑问或危机，而不是大圆满
 
-🔴【内容冲突防范】：
+🔴🔴🔴【内容边界红线 - 违反即失败】🔴🔴🔴：
 11. 📚【参考所有卷】已提供全书结构索引，必须了解全书布局，确保本卷剧情在整体中的定位准确
 12. ⛔【不可重复上一卷】上一卷的剧情、冲突、场景已完成，本卷必须开启新的故事线
-13. ⛔【不可提前写下一卷】下一卷的关键事件、冲突、转折不能在本卷出现，只能埋伏笔
+13. ⛔⛔⛔【不可提前写下一卷】⛔⛔⛔
+    - 下一卷的关键事件、冲突、转折不能在本卷出现
+    - 本卷最后几章是"本卷收尾"，不是"下一卷开头"
+    - 只能埋伏笔暗示，不能直接开始下一卷的剧情
 14. 🚫【不可重复本卷已写】新章节必须从已写内容的结尾继续，绝不可重复已发生的情节
-15. ✅【专注当前卷任务】聚焦本卷的核心矛盾和故事弧，不越界、不重复
+15. ✅【专注当前卷任务】聚焦"${volume.title}"的核心矛盾和故事弧，不越界、不重复
 
 请严格按照以下 JSON 格式返回（只返回纯 JSON）：
 
@@ -522,6 +576,7 @@ ${guidanceSection}
 }
 
 【重要】必须生成 ${chapterCount} 章，编号从 ${startChapterNumber} 到 ${endChapterNumber}！
+【重要】所有章节都必须在"${volume.title}"的剧情范围内，不要写下一卷的内容！
 
 只返回 JSON，不要有任何解释文字。`
 }
@@ -591,6 +646,15 @@ export async function generateVolumeChapters(
         currentVolumeIndex: volumeIndex
       })
 
+      // 获取下一卷的详细信息（即使在压缩模式下也要保留，这是边界约束的关键）
+      const nextVolume = volumeIndex < allVolumes.length - 1 ? allVolumes[volumeIndex + 1] : null
+      const nextVolumeDetailsForContext = nextVolume ? {
+        title: nextVolume.title,
+        summary: nextVolume.summary,
+        mainPlot: (nextVolume as any).mainPlot || '',
+        keyEvents: nextVolume.keyEvents || (nextVolume as any).keyPoints || []
+      } : undefined
+
       // 替换为压缩后的内容
       effectiveWorldSetting = compressed.compressedWorldSetting
       effectiveContextInfo = {
@@ -598,6 +662,8 @@ export async function generateVolumeChapters(
         // 使用全书索引替代部分上下文
         previousVolumeSummary: compressed.previousVolumeKeyPoints,
         nextVolumeSummary: compressed.nextVolumeKeyPoints,
+        // 🔥 关键：保留下一卷的详细信息用于边界约束
+        nextVolumeDetails: nextVolumeDetailsForContext,
         // 添加全书索引到扩展信息中
         volumeIndex: compressed.volumeIndex
       } as any
@@ -605,7 +671,8 @@ export async function generateVolumeChapters(
       console.log('[AutoCreate] 压缩效果:', {
         原始世界观字数: worldSetting.length,
         压缩后字数: compressed.compressedWorldSetting.length,
-        节约: `${Math.round((1 - compressed.compressedWorldSetting.length / worldSetting.length) * 100)}%`
+        节约: `${Math.round((1 - compressed.compressedWorldSetting.length / worldSetting.length) * 100)}%`,
+        下一卷信息: nextVolumeDetailsForContext ? `《${nextVolumeDetailsForContext.title}》` : '无'
       })
     }
 
@@ -922,10 +989,19 @@ export async function generateSingleChapterOutline(
     previousVolumeInfo?: string  // 上一卷最后几章信息
     previousVolumeSummary?: string  // 上一卷完整摘要
     nextVolumeInfo?: string      // 下一卷信息
+    nextVolumeTitle?: string     // 下一卷标题（重要边界标识）
     characterInfo?: string       // 角色档案（精简版）
+    volumeTitle?: string         // 当前卷标题
+    totalChaptersInVolume?: number  // 本卷总章节数
+    currentChapterInVolume?: number // 当前是本卷第几章
   }
 ): Promise<{ title: string; outline: string }> {
   const guidanceText = guidance.trim() ? `\n【指导】${guidance.trim()}` : ''
+
+  // 计算当前章节在本卷中的位置（用于判断是否接近结尾）
+  const isNearEnd = contextInfo?.totalChaptersInVolume && contextInfo?.currentChapterInVolume
+    ? contextInfo.currentChapterInVolume > contextInfo.totalChaptersInVolume * 0.8
+    : false
 
   // 构建上下文信息（精简版）
   let contextSection = ''
@@ -944,19 +1020,40 @@ export async function generateSingleChapterOutline(
       contextSection += `\n【上卷】${contextInfo.previousVolumeInfo.slice(0, 80)}（不可重复）`
     }
     if (contextInfo.nextVolumeInfo) {
-      contextSection += `\n【⛔下卷预告】${contextInfo.nextVolumeInfo.slice(0, 150)}（不可提前写）`
+      contextSection += `\n【⛔⛔下卷内容 - 绝对禁止提前写⛔⛔】`
+      if (contextInfo.nextVolumeTitle) {
+        contextSection += `\n下卷名：《${contextInfo.nextVolumeTitle}》`
+      }
+      contextSection += `\n内容：${contextInfo.nextVolumeInfo.slice(0, 200)}`
+      contextSection += `\n❌ 本章绝不能写属于下一卷的任何内容！`
     }
     if (contextInfo.characterInfo) {
       contextSection += `\n【角色】${contextInfo.characterInfo.slice(0, 100)}`
     }
   }
 
-  const prompt = `写第${chapterNumber}章大纲。
+  // 根据章节位置添加特殊提示
+  let positionHint = ''
+  if (isNearEnd) {
+    positionHint = `
+🚨【本章位置提醒】本章已接近本卷结尾（最后20%）
+✅ 应该做的：总结本卷进展、埋下伏笔、留下悬念
+❌ 绝对禁止：开始下一卷的剧情、进入下一卷的场景、触发下一卷的冲突`
+  }
+
+  const volumeContext = contextInfo?.volumeTitle
+    ? `\n【当前卷】《${contextInfo.volumeTitle}》- 本章内容必须在此卷范围内`
+    : ''
+
+  const prompt = `写第${chapterNumber}章大纲。${volumeContext}
 【卷情】${volumeSummary.slice(0, 200)}
 【前章】${prevOutline.slice(0, 150) || '开篇'}${contextSection}
-【风格】${genres.slice(0, 3).join('、')}${guidanceText}
+【风格】${genres.slice(0, 3).join('、')}${guidanceText}${positionHint}
 
-⚠️ 不可重复已写内容和上卷内容，不可提前写下卷内容，必须推进当前卷剧情！
+⚠️⚠️⚠️ 边界红线：
+1. 不可重复已写内容和上卷内容
+2. 🔴 绝对不可提前写下一卷的任何内容 🔴
+3. 本章必须在当前卷的剧情范围内推进
 
 返回JSON：{"title":"标题（10字内，无编号）","outline":"50-80字：场景+冲突+悬念，简洁无废话"}`
 
@@ -993,7 +1090,9 @@ export async function generateChaptersOneByOne(
     previousVolumeInfo?: string  // 上一卷最后几章信息
     previousVolumeSummary?: string  // 上一卷完整摘要
     nextVolumeInfo?: string      // 下一卷信息
+    nextVolumeTitle?: string     // 下一卷标题（重要边界标识）
     characterInfo?: string       // 角色档案（精简版）
+    volumeTitle?: string         // 当前卷标题
   }
 ): Promise<{ chapterNumber: number; title: string; outline: string }[]> {
   const startNum = startChapterNumber || (existingChapters.length + 1)
@@ -1003,7 +1102,9 @@ export async function generateChaptersOneByOne(
     existingCount: existingChapters.length,
     newCount: count,
     startNum,
-    hasExtendedContext: !!extendedContext
+    hasExtendedContext: !!extendedContext,
+    volumeTitle: extendedContext?.volumeTitle,
+    nextVolumeTitle: extendedContext?.nextVolumeTitle
   })
 
   const results: { chapterNumber: number; title: string; outline: string }[] = []
@@ -1014,20 +1115,30 @@ export async function generateChaptersOneByOne(
   // 准备已有章节的标题列表（用于上下文）
   const existingOutlines = existingChapters.map(ch => ch.title)
 
+  // 计算本卷总章节数（已有 + 将生成）
+  const totalChaptersInVolume = existingChapters.length + count
+
   try {
     for (let i = 0; i < count; i++) {
       const chapterNum = startNum + i
-      console.log(`[AutoCreate] 正在生成第 ${chapterNum} 章...`)
+      // 计算当前是本卷的第几章（从1开始）
+      const currentChapterInVolume = existingChapters.length + i + 1
+
+      console.log(`[AutoCreate] 正在生成第 ${chapterNum} 章（本卷第 ${currentChapterInVolume}/${totalChaptersInVolume} 章）...`)
       onProgress?.(i + 1, count)
 
-      // 构建上下文信息
+      // 构建上下文信息（包含边界约束所需的新参数）
       const contextInfo = {
         existingOutlines: [...existingOutlines, ...results.map(r => `第${r.chapterNumber}章 ${r.title}`)],
         writtenSummary: extendedContext?.writtenSummary,
         previousVolumeInfo: extendedContext?.previousVolumeInfo,
         previousVolumeSummary: extendedContext?.previousVolumeSummary,
         nextVolumeInfo: extendedContext?.nextVolumeInfo,
-        characterInfo: extendedContext?.characterInfo
+        nextVolumeTitle: extendedContext?.nextVolumeTitle,
+        characterInfo: extendedContext?.characterInfo,
+        volumeTitle: extendedContext?.volumeTitle,
+        totalChaptersInVolume,
+        currentChapterInVolume
       }
 
       const result = await generateSingleChapterOutline(

@@ -256,6 +256,106 @@ export function setupIpcHandlers(ipcMain: IpcMain, services: Services) {
     shell.openExternal(url)
   })
 
+  // ==================== AI API 请求（通过主进程代理） ====================
+
+  ipcMain.handle('ai:fetch', async (_, url: string, options: {
+    method: string
+    headers: Record<string, string>
+    body?: string
+  }) => {
+    return new Promise((resolve) => {
+      try {
+        console.log(`[AI Fetch] 请求: ${options.method} ${url}`)
+
+        const request = net.request({
+          method: options.method,
+          url: url
+        })
+
+        // 设置请求头
+        if (options.headers) {
+          Object.entries(options.headers).forEach(([key, value]) => {
+            request.setHeader(key, value)
+          })
+        }
+
+        let responseData = ''
+
+        // 设置超时（60秒）
+        const timeoutId = setTimeout(() => {
+          request.abort()
+          resolve({
+            ok: false,
+            status: 0,
+            data: null,
+            error: '请求超时（60秒）'
+          })
+        }, 60000)
+
+        request.on('response', (response) => {
+          console.log(`[AI Fetch] 响应状态: ${response.statusCode}`)
+
+          response.on('data', (chunk) => {
+            responseData += chunk.toString()
+          })
+
+          response.on('end', () => {
+            clearTimeout(timeoutId)
+
+            let data: any = responseData
+            try {
+              data = JSON.parse(responseData)
+            } catch {
+              // 保持原始字符串
+            }
+
+            resolve({
+              ok: response.statusCode >= 200 && response.statusCode < 300,
+              status: response.statusCode,
+              data
+            })
+          })
+        })
+
+        request.on('error', (error: Error) => {
+          clearTimeout(timeoutId)
+          console.error(`[AI Fetch] 请求错误:`, error)
+
+          let errorMessage = error.message || '网络请求失败'
+          if (error.message.includes('ECONNREFUSED')) {
+            errorMessage = '连接被拒绝'
+          } else if (error.message.includes('ENOTFOUND')) {
+            errorMessage = '无法解析服务器地址'
+          } else if (error.message.includes('ETIMEDOUT')) {
+            errorMessage = '连接超时'
+          }
+
+          resolve({
+            ok: false,
+            status: 0,
+            data: null,
+            error: errorMessage
+          })
+        })
+
+        // 发送请求体
+        if (options.body) {
+          request.write(options.body)
+        }
+
+        request.end()
+      } catch (error: any) {
+        console.error(`[AI Fetch] 异常:`, error)
+        resolve({
+          ok: false,
+          status: 0,
+          data: null,
+          error: error.message || '请求失败'
+        })
+      }
+    })
+  })
+
   // ==================== 服务端认证 ====================
 
   if (serverAuth) {

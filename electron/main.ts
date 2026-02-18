@@ -36,9 +36,31 @@ async function setupProxy() {
     if (proxyEnabled && proxyUrl) {
       // 使用手动配置的代理
       console.log('[Main] 配置手动代理:', proxyUrl)
+
+      // 解析代理 URL 并转换为 Electron 代理规则格式
+      let proxyRules = proxyUrl
+
+      try {
+        // 如果是完整的 URL 格式，转换为 Electron 代理规则
+        if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
+          const url = new URL(proxyUrl)
+          // 格式: http=host:port;https=host:port
+          proxyRules = `http=${url.host};https=${url.host}`
+        } else if (proxyUrl.startsWith('socks5://') || proxyUrl.startsWith('socks://')) {
+          const url = new URL(proxyUrl)
+          // 格式: socks5://host:port
+          proxyRules = `socks5://${url.host}`
+        }
+        // 如果已经是 host:port 格式，直接使用
+      } catch (e) {
+        console.warn('[Main] 代理 URL 解析失败，直接使用:', proxyUrl)
+      }
+
+      console.log('[Main] 转换后的代理规则:', proxyRules)
+
       await session.defaultSession.setProxy({
-        proxyRules: proxyUrl,
-        proxyBypassRules: 'localhost,127.0.0.1'
+        proxyRules: proxyRules,
+        proxyBypassRules: 'localhost,127.0.0.1,<local>'
       })
       console.log('[Main] 代理配置成功')
     } else if (proxyEnabled && !proxyUrl) {
