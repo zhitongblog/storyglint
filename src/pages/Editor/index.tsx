@@ -773,13 +773,14 @@ function Editor() {
 
       console.log('📊 [Editor] 自动更新配置:', autoUpdateConfig)
 
-      // 获取所有章节并添加卷顺序信息（用于正确排序）
+      // 获取所有章节并添加卷信息（用于正确排序和跨卷检测）
       const allChaptersWithVolume = chapters.map(c => {
         const vol = volumes.find(v => v.id === c.volumeId)
         return {
           ...c,
           volumeId: c.volumeId,
-          volumeOrder: vol?.order ?? 0  // 添加卷的顺序用于排序
+          volumeOrder: vol?.order ?? 0,  // 添加卷的顺序用于排序
+          volumeName: vol?.title || `第${vol?.order ?? 1}卷`  // 添加卷名称用于跨卷提示
         }
       })
 

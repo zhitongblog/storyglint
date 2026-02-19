@@ -177,8 +177,19 @@ export function formatToHtml(content: string): string {
 }
 
 /**
+ * 跨卷上下文信息
+ */
+export interface VolumeTransitionContext {
+  isNewVolume: boolean           // 是否是新卷的第一章
+  previousVolumeName?: string    // 上一卷名称
+  currentVolumeName?: string     // 当前卷名称
+  previousVolumeLastChapter?: string  // 上一卷最后一章的完整内容（跨卷时使用更多上下文）
+}
+
+/**
  * 严格按大纲写作 - 单章生成
  * @param storySummary - 前情提要，用于保持长篇连贯性
+ * @param volumeContext - 跨卷上下文信息
  */
 export async function writeChapterStrict(
   worldSetting: string,
@@ -189,7 +200,8 @@ export async function writeChapterStrict(
   nextChapterOutline: string,
   styles: string[],
   targetWordCount: number = 2500,
-  storySummary: string = ''
+  storySummary: string = '',
+  volumeContext?: VolumeTransitionContext
 ): Promise<string> {
   // 分类角色状态
   const activeChars = characters.filter(c => c.status !== 'deceased')
@@ -208,6 +220,30 @@ export async function writeChapterStrict(
   // 前情提要
   const summarySection = storySummary
     ? `\n【前情提要 - 重要剧情摘要】\n${storySummary}\n请确保本章内容与以上剧情保持一致，不要出现矛盾。\n`
+    : ''
+
+  // 跨卷上下文处理
+  const isNewVolume = volumeContext?.isNewVolume || false
+  const volumeTransitionSection = isNewVolume && volumeContext?.previousVolumeName
+    ? `
+╔══════════════════════════════════════════════════════════════╗
+║  📚📚📚【新卷开始 - 重要提示】📚📚📚                          ║
+╚══════════════════════════════════════════════════════════════╝
+
+🔄 卷切换：「${volumeContext.previousVolumeName}」→「${volumeContext.currentVolumeName || '新卷'}」
+
+【新卷开篇要求】
+1. ✅ 这是新卷的第一章，可以有适当的"新篇章感"
+2. ✅ 但必须自然承接上一卷结尾，不能跳跃或遗漏
+3. ✅ 可以用简短的场景/时间切换，但要平滑过渡
+4. ❌ 不要写大段回顾或总结上一卷的内容
+5. ❌ 不要有"翻开新篇章"之类的废话
+
+【上一卷结尾回顾】
+以下是上一卷最后一章的完整内容，请仔细阅读后自然承接：
+${volumeContext.previousVolumeLastChapter || previousChapterContent}
+
+`
     : ''
 
   const prompt = `你是一个经验丰富的网文作家，正在创作一部商业小说。你的写作风格自然流畅，没有AI的痕迹。
@@ -334,6 +370,7 @@ ${worldSetting.slice(0, 600)}
 【主要角色（当前存活）】
 ${characterInfo}
 ${summarySection}
+${volumeTransitionSection}
 
 ╔══════════════════════════════════════════════════════════════╗
 ║  🎯🎯🎯【本章核心任务 - 必须严格执行】🎯🎯🎯                  ║
@@ -357,8 +394,8 @@ ${chapterOutline}
 写作后请检查：是否写了大纲之外的内容？是否提前写了下一章？
 
 【前文衔接】
-${previousChapterContent ? `前一章结尾（最后1500字）：
-${previousChapterContent.slice(-1500)}
+${previousChapterContent ? `前一章结尾（最后${isNewVolume ? '3000' : '1500'}字）：
+${previousChapterContent.slice(isNewVolume ? -3000 : -1500)}
 
 【本章开头 - 自然承接技巧】
 本章开头必须自然承接上一章结尾的悬念，不能跳过或忽略。
@@ -719,6 +756,7 @@ export async function autoWriteAll(
     id: string
     volumeId: string
     volumeOrder?: number  // 卷的顺序，用于正确排序
+    volumeName?: string   // 卷名称，用于跨卷提示
     title: string
     outline: string
     content: string
@@ -933,6 +971,42 @@ export async function autoWriteAll(
     })
 
     try {
+      // 🔥 检测是否跨卷（新卷的第一章）
+      const prevChapterInList = i > 0 ? chaptersToWrite[i - 1] : (startIndex > 0 ? sortedChapters[startIndex - 1] : null)
+      const isNewVolume = prevChapterInList && prevChapterInList.volumeId !== chapter.volumeId
+
+      // 构建跨卷上下文
+      let volumeContext: VolumeTransitionContext | undefined
+      if (isNewVolume && prevChapterInList) {
+        console.log(`📚 [AutoWrite] 检测到跨卷：「${prevChapterInList.volumeName || '上一卷'}」→「${chapter.volumeName || '新卷'}」`)
+
+        // 跨卷时强制更新摘要，确保新卷开始时有最新的剧情摘要
+        if (recentChapters.length > 0) {
+          try {
+            storySummary = await generateStorySummary(
+              storySummary,
+              recentChapters.slice(-8),  // 取更多章节生成更详细的摘要
+              characters,
+              { triggerReason: 'new_arc', majorEvent: `开始新卷：${chapter.volumeName || '新卷'}` }
+            )
+            console.log(`✅ [AutoWrite] 跨卷时已更新全书摘要`)
+            if (onSummaryUpdate) {
+              await onSummaryUpdate(storySummary)
+            }
+            recentChapters.length = 0
+          } catch (e) {
+            console.warn('Failed to update summary at volume transition:', e)
+          }
+        }
+
+        volumeContext = {
+          isNewVolume: true,
+          previousVolumeName: prevChapterInList.volumeName || `第${prevChapterInList.volumeOrder || 1}卷`,
+          currentVolumeName: chapter.volumeName || `第${chapter.volumeOrder || 1}卷`,
+          previousVolumeLastChapter: prevChapterInList.content || previousContent
+        }
+      }
+
       const content = await writeChapterStrict(
         worldSetting,
         characters,
@@ -942,7 +1016,8 @@ export async function autoWriteAll(
         nextChapter?.outline || '',
         styles,
         targetWordCount,
-        storySummary // 传递剧情摘要
+        storySummary, // 传递剧情摘要
+        volumeContext  // 传递跨卷上下文
       )
 
       onProgress({
