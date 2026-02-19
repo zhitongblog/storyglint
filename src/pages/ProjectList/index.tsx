@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Button, Empty, Spin, Tag, Dropdown, Modal, App } from 'antd'
+import { Card, Button, Empty, Spin, Tag, Dropdown, App } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,

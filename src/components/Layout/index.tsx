@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Layout as AntLayout, Menu, Avatar, Dropdown, Button, Space, Tooltip, Modal, App } from 'antd'
+import { Layout as AntLayout, Menu, Avatar, Dropdown, Button, Space, Tooltip, App } from 'antd'
 import {
   HomeOutlined,
   EditOutlined,
