@@ -83,6 +83,7 @@ declare global {
         getChapters: (volumeId: string) => Promise<any[]>
         getChapter: (id: string) => Promise<any | null>
         createChapter: (chapter: any) => Promise<any>
+        createChaptersBatch: (chapters: any[]) => Promise<any[]>
         updateChapter: (id: string, data: any) => Promise<any>
         deleteChapter: (id: string) => Promise<void>
 
