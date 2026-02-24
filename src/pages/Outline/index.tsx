@@ -521,7 +521,7 @@ function Outline() {
         }))
 
         // 批量创建章节（内部使用事务，确保所有章节序号连续且不重复）
-        const createdChapters = await window.electron.db.createChaptersBatch(chaptersToCreate)
+        const createdChapters = await (window.electron.db as any).createChaptersBatch(chaptersToCreate)
         console.log(`✅ [大纲生成] 成功保存 ${createdChapters.length} 个章节`)
 
         setGeneratingProgress(90)
