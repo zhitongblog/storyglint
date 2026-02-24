@@ -9,16 +9,57 @@ const uuidv4 = () => crypto.randomUUID()
 export class DatabaseService {
   private db: Database.Database | null = null
   private dbPath: string
+  private userDataPath: string
 
   constructor() {
-    const userDataPath = app.getPath('userData')
-    this.dbPath = path.join(userDataPath, 'storyglint.db')
+    this.userDataPath = app.getPath('userData')
+    this.dbPath = path.join(this.userDataPath, 'storyglint.db')
+  }
+
+  /**
+   * 迁移旧数据库文件（从 novascribe.db 到 storyglint.db）
+   * 这确保用户升级后数据不会丢失
+   */
+  private migrateOldDatabase(): void {
+    const fs = require('fs')
+    const oldDbPath = path.join(this.userDataPath, 'novascribe.db')
+    const newDbPath = this.dbPath
+
+    // 检查是否需要迁移：旧文件存在且新文件不存在
+    if (fs.existsSync(oldDbPath) && !fs.existsSync(newDbPath)) {
+      console.log('[Database] 检测到旧数据库文件，正在迁移...')
+
+      try {
+        // 重命名主数据库文件
+        fs.renameSync(oldDbPath, newDbPath)
+        console.log('[Database] 主数据库文件迁移成功')
+
+        // 迁移 WAL 模式相关文件（如果存在）
+        const walFiles = ['-shm', '-wal']
+        for (const suffix of walFiles) {
+          const oldWalPath = oldDbPath + suffix
+          const newWalPath = newDbPath + suffix
+          if (fs.existsSync(oldWalPath)) {
+            fs.renameSync(oldWalPath, newWalPath)
+            console.log(`[Database] ${suffix} 文件迁移成功`)
+          }
+        }
+
+        console.log('[Database] 数据库迁移完成: novascribe.db -> storyglint.db')
+      } catch (error) {
+        console.error('[Database] 数据库迁移失败:', error)
+        // 迁移失败不应该阻止程序运行，新用户会创建新数据库
+      }
+    }
   }
 
   /**
    * 初始化数据库
    */
   async initialize(): Promise<void> {
+    // 先尝试迁移旧数据库
+    this.migrateOldDatabase()
+
     this.db = new Database(this.dbPath)
     this.db.pragma('journal_mode = WAL')
 

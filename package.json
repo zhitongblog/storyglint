@@ -1,6 +1,6 @@
 {
   "name": "storyglint",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "description": "智能网文创作 Windows 桌面客户端",
   "main": "dist-electron/main.js",
   "scripts": {

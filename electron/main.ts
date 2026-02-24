@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, safeStorage, session } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import Store from 'electron-store'
 import { setupIpcHandlers } from './ipc/handlers'
 import { GoogleAuthService } from './services/google-auth'
@@ -11,6 +12,36 @@ import { DatabaseService } from './services/database'
 
 // 环境变量
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+
+/**
+ * 迁移旧配置文件（从 novascribe 到 storyglint）
+ * 必须在任何 Store 实例化之前运行
+ */
+function migrateOldConfigFiles() {
+  const userDataPath = app.getPath('userData')
+
+  const migrations = [
+    { old: 'novascribe-settings.json', new: 'storyglint-settings.json' },
+    { old: 'novascribe-auth.json', new: 'storyglint-auth.json' }
+  ]
+
+  for (const { old: oldName, new: newName } of migrations) {
+    const oldPath = path.join(userDataPath, oldName)
+    const newPath = path.join(userDataPath, newName)
+
+    if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+      try {
+        fs.renameSync(oldPath, newPath)
+        console.log(`[Main] 迁移配置文件: ${oldName} -> ${newName}`)
+      } catch (error) {
+        console.error(`[Main] 迁移配置文件失败: ${oldName}`, error)
+      }
+    }
+  }
+}
+
+// 在创建 Store 之前执行迁移
+migrateOldConfigFiles()
 
 // 设置存储
 const store = new Store({

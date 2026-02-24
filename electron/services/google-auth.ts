@@ -34,6 +34,7 @@ export class GoogleAuthService {
   private proxyAgent: HttpsProxyAgent<string> | null = null
 
   constructor() {
+    // 注意：配置文件迁移已在 main.ts 中处理
     this.store = new Store({
       name: 'storyglint-auth',
       encryptionKey: 'storyglint-secure-key'
