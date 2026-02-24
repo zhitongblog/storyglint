@@ -12,7 +12,7 @@ export class DatabaseService {
 
   constructor() {
     const userDataPath = app.getPath('userData')
-    this.dbPath = path.join(userDataPath, 'novascribe.db')
+    this.dbPath = path.join(userDataPath, 'storyglint.db')
   }
 
   /**

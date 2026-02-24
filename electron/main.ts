@@ -14,7 +14,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 // 设置存储
 const store = new Store({
-  name: 'novascribe-settings'
+  name: 'storyglint-settings'
 })
 
 let mainWindow: BrowserWindow | null = null

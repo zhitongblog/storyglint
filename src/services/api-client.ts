@@ -1,5 +1,5 @@
 /**
- * NovaScribe 服务端 API 客户端
+ * StoryGlint 服务端 API 客户端
  * 处理所有与服务端的HTTP通信
  */
 

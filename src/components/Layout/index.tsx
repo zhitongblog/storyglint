@@ -243,7 +243,7 @@ function Layout() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span className="text-primary-400 font-bold text-lg">NovaScribe</span>
+          <span className="text-primary-400 font-bold text-lg">StoryGlint</span>
           {currentProject && (
             <>
               <span className="text-dark-muted">/</span>

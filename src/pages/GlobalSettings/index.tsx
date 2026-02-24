@@ -937,7 +937,7 @@ function GlobalSettings() {
         title={
           <Space>
             <CloudServerOutlined className="text-green-500" />
-            <span>NovaScribe 服务端</span>
+            <span>StoryGlint 服务端</span>
             {connectionStatus === 'success' && <CheckCircleOutlined className="text-green-500" />}
             {connectionStatus === 'error' && <ExclamationCircleOutlined className="text-red-500" />}
           </Space>
@@ -947,7 +947,7 @@ function GlobalSettings() {
       >
         <Alert
           message="连接自建服务端"
-          description="配置您的 NovaScribe 服务端地址，实现数据云同步和多设备协作。服务端提供用户管理、数据备份等功能。"
+          description="配置您的 StoryGlint 服务端地址，实现数据云同步和多设备协作。服务端提供用户管理、数据备份等功能。"
           type="info"
           showIcon
           className="mb-4"

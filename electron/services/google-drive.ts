@@ -1,7 +1,7 @@
 import { google, drive_v3 } from 'googleapis'
 import { GoogleAuthService } from './google-auth'
 
-const APP_FOLDER_NAME = 'NovaScribe'
+const APP_FOLDER_NAME = 'StoryGlint'
 
 export class GoogleDriveService {
   private authService: GoogleAuthService

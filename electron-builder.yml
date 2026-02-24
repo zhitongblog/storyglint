@@ -1,6 +1,6 @@
-appId: com.novascribe.app
-productName: NovaScribe
-copyright: Copyright © 2026 NovaScribe Team
+appId: com.storyglint.app
+productName: StoryGlint
+copyright: Copyright © 2026 StoryGlint Team
 
 directories:
   output: release
@@ -43,8 +43,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: NovaScribe
-  uninstallDisplayName: NovaScribe
+  shortcutName: StoryGlint
+  uninstallDisplayName: StoryGlint
   license: LICENSE
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
@@ -90,10 +90,10 @@ linux:
   category: Office
   icon: assets/icon.png
   desktop:
-    Name: NovaScribe
+    Name: StoryGlint
     Comment: 智能网文创作工具
     Categories: Office;WordProcessor;
-    StartupWMClass: NovaScribe
+    StartupWMClass: StoryGlint
 
 # Debian 包配置
 deb:

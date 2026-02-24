@@ -1,5 +1,5 @@
 {
-  "name": "novascribe",
+  "name": "storyglint",
   "version": "1.0.27",
   "description": "智能网文创作 Windows 桌面客户端",
   "main": "dist-electron/main.js",
@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "author": {
-    "name": "NovaScribe Team",
+    "name": "StoryGlint Team",
     "email": "lixd220@gmail.com"
   },
   "license": "MIT",
@@ -69,8 +69,8 @@
     "rimraf": "^5.0.0"
   },
   "build": {
-    "appId": "com.novascribe.app",
-    "productName": "NovaScribe",
+    "appId": "com.storyglint.app",
+    "productName": "StoryGlint",
     "directories": {
       "output": "release"
     },

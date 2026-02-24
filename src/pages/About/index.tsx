@@ -31,7 +31,7 @@ function About() {
         <div className="text-center mb-6">
           <Title level={2} className="mb-2">
             <span className="bg-gradient-to-r from-purple-500 to-violet-600 bg-clip-text text-transparent">
-              NovaScribe
+              StoryGlint
             </span>
           </Title>
           <Text type="secondary" className="text-lg">智能网文创作工具</Text>
@@ -88,7 +88,7 @@ function About() {
             <div className="mt-3">
               <Button
                 icon={<GithubOutlined />}
-                onClick={() => openExternal('https://github.com/zhitongblog/novascribe-github')}
+                onClick={() => openExternal('https://github.com/zhitongblog/storyglint')}
               >
                 GitHub 开源地址
               </Button>
@@ -127,7 +127,7 @@ function About() {
               支持作者
             </Title>
             <Paragraph type="secondary" className="mt-4">
-              NovaScribe 是一款免费开源的软件，如果它对您的创作有所帮助，
+              StoryGlint 是一款免费开源的软件，如果它对您的创作有所帮助，
               <br />
               欢迎请作者喝杯咖啡，您的支持是我持续更新的动力！
             </Paragraph>
@@ -171,14 +171,14 @@ function About() {
             </div>
 
             <div className="mt-6 p-4 bg-yellow-50 rounded-lg text-yellow-700 max-w-md mx-auto">
-              感谢每一位支持者！您的鼓励让 NovaScribe 变得更好。
+              感谢每一位支持者！您的鼓励让 StoryGlint 变得更好。
             </div>
           </div>
         </Space>
       </Card>
 
       <div className="text-center text-gray-500 text-sm">
-        &copy; 2026 NovaScribe. All rights reserved.
+        &copy; 2026 StoryGlint. All rights reserved.
       </div>
     </div>
   )

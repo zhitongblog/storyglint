@@ -25,7 +25,7 @@ interface ProjectMetadata {
 
 /**
  * 服务端同步服务
- * 管理本地数据与 NovaScribe 服务端的同步
+ * 管理本地数据与 StoryGlint 服务端的同步
  */
 export class ServerSyncService {
   private authService: ServerAuthService

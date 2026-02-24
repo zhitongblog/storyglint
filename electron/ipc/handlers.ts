@@ -23,7 +23,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, services: Services) {
 
   // 设置存储（与 google-auth 使用相同的 store）
   const settingsStore = new Store({
-    name: 'novascribe-settings'
+    name: 'storyglint-settings'
   })
 
   // ==================== 窗口控制 ====================

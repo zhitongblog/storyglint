@@ -35,12 +35,12 @@ export class GoogleAuthService {
 
   constructor() {
     this.store = new Store({
-      name: 'novascribe-auth',
-      encryptionKey: 'novascribe-secure-key'
+      name: 'storyglint-auth',
+      encryptionKey: 'storyglint-secure-key'
     })
 
     this.settingsStore = new Store({
-      name: 'novascribe-settings'
+      name: 'storyglint-settings'
     })
 
     this.setupProxy()
@@ -278,7 +278,7 @@ export class GoogleAuthService {
             <body>
               <div class="container">
                 <h1>${error ? '登录失败' : '登录成功！'}</h1>
-                <p>${error ? '错误: ' + error + '<br>请关闭此页面并重试' : '请返回 NovaScribe 应用，此页面可以关闭了'}</p>
+                <p>${error ? '错误: ' + error + '<br>请关闭此页面并重试' : '请返回 StoryGlint 应用，此页面可以关闭了'}</p>
               </div>
             </body>
             </html>

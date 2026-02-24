@@ -4,7 +4,7 @@ import http from 'http'
 import url from 'url'
 
 const store = new Store({
-  name: 'novascribe-settings'
+  name: 'storyglint-settings'
 })
 
 // 本地回调服务器端口
@@ -32,7 +32,7 @@ export interface ServerUser {
 
 /**
  * 服务端认证服务
- * 处理与 NovaScribe 服务端的 OAuth 认证
+ * 处理与 StoryGlint 服务端的 OAuth 认证
  */
 export class ServerAuthService {
   private serverUrl: string
@@ -148,7 +148,7 @@ export class ServerAuthService {
         // 处理根路径（用于调试）
         if (parsedUrl.pathname === '/') {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-          res.end('<html><body><h1>NovaScribe OAuth Callback Server</h1><p>等待回调中...</p></body></html>')
+          res.end('<html><body><h1>StoryGlint OAuth Callback Server</h1><p>等待回调中...</p></body></html>')
           return
         }
 
