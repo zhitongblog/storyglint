@@ -139,6 +139,11 @@ export class DatabaseService {
       )
     `)
 
+    // 迁移：为chapters表添加synced_at字段（用于跟踪同步状态，防止覆盖本地修改）
+    try {
+      this.db.exec(`ALTER TABLE chapters ADD COLUMN synced_at TEXT`)
+    } catch { /* 字段已存在 */ }
+
     // 角色表
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS characters (
@@ -675,6 +680,11 @@ export class DatabaseService {
       updates.push('sort_order = ?')
       values.push(data.order)
     }
+    // 支持同步时更新 synced_at
+    if (data.syncedAt !== undefined) {
+      updates.push('synced_at = ?')
+      values.push(data.syncedAt)
+    }
 
     if (updates.length > 0) {
       updates.push('updated_at = ?')
@@ -704,7 +714,8 @@ export class DatabaseService {
       wordCount: row.word_count,
       order: row.sort_order,
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
+      syncedAt: row.synced_at
     }
   }
 
@@ -1112,11 +1123,36 @@ export class DatabaseService {
   /**
    * 创建或更新章节（用于同步）
    * 保留原有ID
+   * @param data 章节数据
+   * @param forceOverwrite 是否强制覆盖（跳过冲突检测）
+   * @returns 章节数据，如果有冲突且不强制覆盖则返回 { conflict: true, ... }
    */
-  createOrUpdateChapter(data: any): any {
+  createOrUpdateChapter(data: any, forceOverwrite: boolean = false): any {
     const existing = this.getChapter(data.id)
     if (existing) {
-      return this.updateChapter(data.id, data)
+      // 检查是否有本地未同步的修改（冲突检测）
+      if (!forceOverwrite && existing.syncedAt) {
+        const localModifiedTime = new Date(existing.updatedAt).getTime()
+        const lastSyncTime = new Date(existing.syncedAt).getTime()
+
+        // 如果本地修改时间晚于上次同步时间，且有实际内容变化，则存在冲突
+        if (localModifiedTime > lastSyncTime && existing.content !== data.content) {
+          console.log('[Database] 检测到章节冲突:', data.title, '本地修改时间:', existing.updatedAt, '上次同步:', existing.syncedAt)
+          return {
+            conflict: true,
+            localChapter: existing,
+            serverChapter: data,
+            message: `章节 "${data.title}" 有本地未同步的修改`
+          }
+        }
+      }
+
+      // 更新章节，同时更新 synced_at
+      const result = this.updateChapter(data.id, {
+        ...data,
+        syncedAt: new Date().toISOString()
+      })
+      return result
     }
 
     const now = new Date().toISOString()
@@ -1124,8 +1160,8 @@ export class DatabaseService {
     const wordCount = content.replace(/\s/g, '').length
 
     const stmt = this.db!.prepare(`
-      INSERT INTO chapters (id, volume_id, title, outline, content, word_count, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO chapters (id, volume_id, title, outline, content, word_count, sort_order, created_at, updated_at, synced_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     stmt.run(
@@ -1137,10 +1173,73 @@ export class DatabaseService {
       wordCount,
       data.order || 0,
       data.createdAt || now,
-      data.updatedAt || now
+      data.updatedAt || now,
+      now  // synced_at 设为当前时间
     )
 
     return this.getChapter(data.id)
+  }
+
+  /**
+   * 检查章节是否有本地未同步的修改
+   */
+  hasLocalUnsyncedChanges(chapterId: string): boolean {
+    const chapter = this.getChapter(chapterId)
+    if (!chapter) return false
+    if (!chapter.syncedAt) return false  // 从未同步过，不算冲突
+
+    const localModifiedTime = new Date(chapter.updatedAt).getTime()
+    const lastSyncTime = new Date(chapter.syncedAt).getTime()
+
+    return localModifiedTime > lastSyncTime
+  }
+
+  /**
+   * 获取项目中所有有本地未同步修改的章节
+   */
+  getUnsyncedChapters(projectId: string): any[] {
+    const volumes = this.getVolumes(projectId)
+    const unsyncedChapters: any[] = []
+
+    for (const volume of volumes) {
+      const chapters = this.getChapters(volume.id)
+      for (const chapter of chapters) {
+        if (this.hasLocalUnsyncedChanges(chapter.id)) {
+          unsyncedChapters.push(chapter)
+        }
+      }
+    }
+
+    return unsyncedChapters
+  }
+
+  /**
+   * 标记章节为已同步
+   */
+  markChapterSynced(chapterId: string): void {
+    const now = new Date().toISOString()
+    const stmt = this.db!.prepare(`
+      UPDATE chapters SET synced_at = ? WHERE id = ?
+    `)
+    stmt.run(now, chapterId)
+  }
+
+  /**
+   * 批量标记章节为已同步
+   */
+  markChaptersSynced(chapterIds: string[]): void {
+    const now = new Date().toISOString()
+    const stmt = this.db!.prepare(`
+      UPDATE chapters SET synced_at = ? WHERE id = ?
+    `)
+
+    const markAll = this.db!.transaction(() => {
+      for (const id of chapterIds) {
+        stmt.run(now, id)
+      }
+    })
+
+    markAll()
   }
 
   /**

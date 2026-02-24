@@ -2,6 +2,15 @@ import { ServerAuthService } from './server-auth'
 import { DatabaseService } from './database'
 import type { Project } from '../../src/types'
 
+interface ChapterConflict {
+  chapterId: string
+  chapterTitle: string
+  localContent: string
+  serverContent: string
+  localUpdatedAt: string
+  serverUpdatedAt: string
+}
+
 interface SyncResult {
   success: boolean
   uploaded?: number
@@ -9,6 +18,7 @@ interface SyncResult {
   deleted?: number
   skippedDeleted?: number
   conflicts?: number
+  chapterConflicts?: ChapterConflict[]
   errors?: string[]
   error?: string
 }
@@ -143,6 +153,7 @@ export class ServerSyncService {
     let downloaded = 0
     let conflicts = 0
     const errors: string[] = []
+    const allChapterConflicts: ChapterConflict[] = []
 
     // 创建服务端项目映射
     const serverProjectMap = new Map<string, ProjectMetadata>()
@@ -162,6 +173,9 @@ export class ServerSyncService {
           console.log('[ServerSync] 上传新项目:', localProject.title)
           await this.uploadProject(localProject, accessToken)
           uploaded++
+
+          // 上传成功后，标记所有章节为已同步
+          this.markProjectChaptersSynced(localProject.id)
         } else {
           // 优先比较版本号，时间戳作为辅助
           const localVersion = localProject.version || 0
@@ -176,21 +190,40 @@ export class ServerSyncService {
             console.log('[ServerSync] 本地版本更高，上传项目:', localProject.title)
             await this.uploadProject(localProject, accessToken)
             uploaded++
+
+            // 上传成功后，标记所有章节为已同步
+            this.markProjectChaptersSynced(localProject.id)
           } else if (serverVersion > localVersion) {
-            // 服务端版本更高 -> 下载
+            // 服务端版本更高 -> 下载（带冲突检测）
             console.log('[ServerSync] 服务端版本更高，下载项目:', localProject.title)
-            await this.downloadProject(serverProject.id, accessToken)
+            const chapterConflicts = await this.downloadProject(serverProject.id, accessToken)
             downloaded++
+
+            // 收集章节冲突
+            if (chapterConflicts.length > 0) {
+              allChapterConflicts.push(...chapterConflicts)
+              conflicts += chapterConflicts.length
+              console.log(`[ServerSync] 项目 ${localProject.title} 有 ${chapterConflicts.length} 个章节冲突`)
+            }
           } else {
             // 版本相同，使用时间戳作为辅助判断
             if (localTime > serverTime) {
               console.log('[ServerSync] 版本相同但本地时间更新，上传项目:', localProject.title)
               await this.uploadProject(localProject, accessToken)
               uploaded++
+
+              // 上传成功后，标记所有章节为已同步
+              this.markProjectChaptersSynced(localProject.id)
             } else if (serverTime > localTime) {
               console.log('[ServerSync] 版本相同但服务端时间更新，下载项目:', localProject.title)
-              await this.downloadProject(serverProject.id, accessToken)
+              const chapterConflicts = await this.downloadProject(serverProject.id, accessToken)
               downloaded++
+
+              // 收集章节冲突
+              if (chapterConflicts.length > 0) {
+                allChapterConflicts.push(...chapterConflicts)
+                conflicts += chapterConflicts.length
+              }
             }
             // 版本和时间都相同 -> 无需同步
           }
@@ -219,7 +252,7 @@ export class ServerSyncService {
         }
 
         try {
-          // 服务端有，本地没有 -> 下载
+          // 服务端有，本地没有 -> 下载（新项目不会有冲突）
           console.log('[ServerSync] 下载新项目:', serverProject.title)
           await this.downloadProject(serverProject.id, accessToken)
           downloaded++
@@ -231,9 +264,10 @@ export class ServerSyncService {
     }
 
     return {
-      success: errors.length === 0,
+      success: errors.length === 0 && allChapterConflicts.length === 0,
       uploaded,
       downloaded,
+      chapterConflicts: allChapterConflicts.length > 0 ? allChapterConflicts : undefined,
       skippedDeleted,
       conflicts,
       errors: errors.length > 0 ? errors : undefined
@@ -288,8 +322,9 @@ export class ServerSyncService {
 
   /**
    * 下载单个项目
+   * @returns 返回章节冲突信息（如果有的话）
    */
-  async downloadProject(projectId: string, accessToken?: string): Promise<void> {
+  async downloadProject(projectId: string, accessToken?: string): Promise<ChapterConflict[]> {
     const token = accessToken || this.authService.getAccessToken()
     if (!token) {
       throw new Error('无法获取访问令牌')
@@ -313,10 +348,16 @@ export class ServerSyncService {
 
     const { project: serverProject } = data.data
 
-    // 导入项目数据到本地数据库
-    await this.importProjectData(serverProject.data, serverProject)
+    // 导入项目数据到本地数据库，返回冲突信息
+    const conflicts = await this.importProjectData(serverProject.data, serverProject)
 
-    console.log('[ServerSync] 项目下载成功:', serverProject.title)
+    if (conflicts.length > 0) {
+      console.log('[ServerSync] 项目下载完成，但有', conflicts.length, '个章节冲突:', serverProject.title)
+    } else {
+      console.log('[ServerSync] 项目下载成功:', serverProject.title)
+    }
+
+    return conflicts
   }
 
   /**
@@ -469,9 +510,11 @@ export class ServerSyncService {
 
   /**
    * 导入项目完整数据
+   * @returns 返回冲突信息（如果有的话）
    */
-  private async importProjectData(data: any, metadata: any): Promise<void> {
+  private async importProjectData(data: any, metadata: any): Promise<ChapterConflict[]> {
     const { project, volumes, chapters, characters } = data
+    const conflicts: ChapterConflict[] = []
 
     // 导入项目
     await this.database.createOrUpdateProject({
@@ -484,14 +527,60 @@ export class ServerSyncService {
       await this.database.createOrUpdateVolume(volume)
     }
 
-    // 导入章节
+    // 导入章节 - 使用冲突检测
     for (const chapter of chapters || []) {
-      await this.database.createOrUpdateChapter(chapter)
+      const result = await this.database.createOrUpdateChapter(chapter, false)
+
+      // 检查是否有冲突
+      if (result && result.conflict) {
+        console.log('[ServerSync] 检测到章节冲突:', chapter.title)
+        conflicts.push({
+          chapterId: chapter.id,
+          chapterTitle: chapter.title,
+          localContent: result.localChapter.content || '',
+          serverContent: chapter.content || '',
+          localUpdatedAt: result.localChapter.updatedAt,
+          serverUpdatedAt: chapter.updatedAt || metadata.lastModifiedAt
+        })
+
+        // 冲突时保留本地内容，但更新其他元数据（标题、大纲等）
+        // 这样用户可以手动决定如何处理
+        await this.database.updateChapter(chapter.id, {
+          title: chapter.title,
+          outline: chapter.outline,
+          order: chapter.order
+          // 注意：不更新 content，保留本地内容
+        })
+      }
     }
 
     // 导入角色
     for (const character of characters || []) {
       await this.database.createOrUpdateCharacter(character)
+    }
+
+    return conflicts
+  }
+
+  /**
+   * 标记项目中所有章节为已同步
+   */
+  private markProjectChaptersSynced(projectId: string): void {
+    try {
+      const volumes = this.database.getVolumes(projectId)
+      const chapterIds: string[] = []
+
+      for (const volume of volumes) {
+        const chapters = this.database.getChapters(volume.id)
+        chapterIds.push(...chapters.map((c: any) => c.id))
+      }
+
+      if (chapterIds.length > 0) {
+        this.database.markChaptersSynced(chapterIds)
+        console.log(`[ServerSync] 已标记 ${chapterIds.length} 个章节为已同步`)
+      }
+    } catch (error) {
+      console.error('[ServerSync] 标记章节同步状态失败:', error)
     }
   }
 
