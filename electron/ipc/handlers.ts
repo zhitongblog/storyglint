@@ -210,6 +210,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, services: Services) {
     database.deleteChapter(id)
   })
 
+  // 批量创建章节（使用事务，防止并发时序号重复）
+  ipcMain.handle('db:createChaptersBatch', (_, chapters) => {
+    return database.createChaptersBatch(chapters)
+  })
+
   // ==================== 数据库 - 角色 ====================
 
   ipcMain.handle('db:getCharacters', (_, projectId) => {

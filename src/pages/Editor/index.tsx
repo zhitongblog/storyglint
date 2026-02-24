@@ -760,6 +760,20 @@ function Editor() {
     shouldStopRef.current = false
 
     try {
+      // 重新加载最新数据，确保章节和卷信息是最新的
+      console.log('🔄 [Editor] 重新加载章节和卷数据...')
+      await loadProject(currentProject.id)
+      await new Promise(resolve => setTimeout(resolve, 100)) // 等待 store 更新
+
+      // 从数据库获取最新的卷和章节数据（避免依赖可能过时的 store 数据）
+      const freshVolumes = await window.electron.db.getVolumes(currentProject.id)
+      const freshChapters: any[] = []
+      for (const vol of freshVolumes) {
+        const volChapters = await window.electron.db.getChapters(vol.id)
+        freshChapters.push(...volChapters)
+      }
+      console.log(`📊 [Editor] 已加载 ${freshVolumes.length} 卷，${freshChapters.length} 章`)
+
       // 读取自动更新配置
       const autoUpdateEnabled = await window.electron.settings.get('autoUpdateEnabled')
       const summaryInterval = await window.electron.settings.get('summaryInterval')
@@ -773,9 +787,9 @@ function Editor() {
 
       console.log('📊 [Editor] 自动更新配置:', autoUpdateConfig)
 
-      // 获取所有章节并添加卷信息（用于正确排序和跨卷检测）
-      const allChaptersWithVolume = chapters.map(c => {
-        const vol = volumes.find(v => v.id === c.volumeId)
+      // 获取所有章节并添加卷信息（用于正确排序和跨卷检测）- 使用新鲜数据
+      const allChaptersWithVolume = freshChapters.map(c => {
+        const vol = freshVolumes.find((v: any) => v.id === c.volumeId)
         return {
           ...c,
           volumeId: c.volumeId,

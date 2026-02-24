@@ -797,13 +797,22 @@ export async function autoWriteAll(
 
   // 按卷和章节顺序排序 - 使用volumeOrder而不是volumeId字符串比较
   const sortedChapters = [...allChapters].sort((a, b) => {
-    // 先按卷的顺序排序（使用volumeOrder，如果没有则按volumeId）
-    const volOrderA = a.volumeOrder ?? 0
-    const volOrderB = b.volumeOrder ?? 0
-    if (volOrderA !== volOrderB) {
-      return volOrderA - volOrderB
+    // 先按卷的顺序排序
+    // 优先使用 volumeOrder，如果未定义则使用 volumeId 分组（确保同卷章节在一起）
+    const volOrderA = a.volumeOrder ?? -1
+    const volOrderB = b.volumeOrder ?? -1
+
+    // 如果都有 volumeOrder，按 volumeOrder 排序
+    if (volOrderA >= 0 && volOrderB >= 0) {
+      if (volOrderA !== volOrderB) {
+        return volOrderA - volOrderB
+      }
+    } else if (a.volumeId !== b.volumeId) {
+      // 如果没有 volumeOrder 但 volumeId 不同，按 volumeId 分组
+      return a.volumeId.localeCompare(b.volumeId)
     }
-    // 再按章节order排序
+
+    // 同一卷内，按章节 order 排序
     return a.order - b.order
   })
 

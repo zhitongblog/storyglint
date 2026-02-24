@@ -83,6 +83,7 @@ export interface ElectronAPI {
     getChapters: (volumeId: string) => Promise<any[]>
     getChapter: (id: string) => Promise<any | null>
     createChapter: (chapter: any) => Promise<any>
+    createChaptersBatch: (chapters: any[]) => Promise<any[]>
     updateChapter: (id: string, data: any) => Promise<any>
     deleteChapter: (id: string) => Promise<void>
 
@@ -190,6 +191,7 @@ const electronAPI: ElectronAPI = {
     getChapters: (volumeId) => ipcRenderer.invoke('db:getChapters', volumeId),
     getChapter: (id) => ipcRenderer.invoke('db:getChapter', id),
     createChapter: (chapter) => ipcRenderer.invoke('db:createChapter', chapter),
+    createChaptersBatch: (chapters) => ipcRenderer.invoke('db:createChaptersBatch', chapters),
     updateChapter: (id, data) => ipcRenderer.invoke('db:updateChapter', id, data),
     deleteChapter: (id) => ipcRenderer.invoke('db:deleteChapter', id),
 

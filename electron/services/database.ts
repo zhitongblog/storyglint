@@ -566,10 +566,17 @@ export class DatabaseService {
     const id = uuidv4()
     const now = new Date().toISOString()
 
-    const maxOrder = this.db!.prepare(
-      'SELECT MAX(sort_order) as max FROM chapters WHERE volume_id = ?'
-    ).get(data.volumeId) as any
-    const sortOrder = (maxOrder?.max || 0) + 1
+    // 支持显式传递 order 值，避免并发时计算出相同的序号
+    let sortOrder: number
+    if (data.order !== undefined && data.order !== null) {
+      sortOrder = data.order
+    } else {
+      // 使用事务确保原子性：获取 MAX 并插入
+      const maxOrder = this.db!.prepare(
+        'SELECT MAX(sort_order) as max FROM chapters WHERE volume_id = ?'
+      ).get(data.volumeId) as any
+      sortOrder = (maxOrder?.max || 0) + 1
+    }
 
     const stmt = this.db!.prepare(`
       INSERT INTO chapters (id, volume_id, title, outline, content, word_count, sort_order, created_at, updated_at)
@@ -592,6 +599,57 @@ export class DatabaseService {
     )
 
     return this.getChapter(id)
+  }
+
+  /**
+   * 批量创建章节（使用事务确保原子性，防止并发时序号重复）
+   */
+  createChaptersBatch(chaptersData: any[]): any[] {
+    if (!chaptersData.length) return []
+
+    const volumeId = chaptersData[0].volumeId
+    const now = new Date().toISOString()
+
+    // 获取当前最大序号
+    const maxOrder = this.db!.prepare(
+      'SELECT MAX(sort_order) as max FROM chapters WHERE volume_id = ?'
+    ).get(volumeId) as any
+    let currentOrder = (maxOrder?.max || 0)
+
+    const insertStmt = this.db!.prepare(`
+      INSERT INTO chapters (id, volume_id, title, outline, content, word_count, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    const createdIds: string[] = []
+
+    // 使用事务批量插入
+    const insertAll = this.db!.transaction(() => {
+      for (const data of chaptersData) {
+        const id = uuidv4()
+        currentOrder++
+        const content = data.content || ''
+        const wordCount = content.replace(/\s/g, '').length
+
+        insertStmt.run(
+          id,
+          data.volumeId,
+          data.title || '第一章',
+          data.outline || '',
+          content,
+          wordCount,
+          currentOrder,
+          now,
+          now
+        )
+        createdIds.push(id)
+      }
+    })
+
+    insertAll()
+
+    // 返回创建的章节
+    return createdIds.map(id => this.getChapter(id))
   }
 
   updateChapter(id: string, data: any): any {

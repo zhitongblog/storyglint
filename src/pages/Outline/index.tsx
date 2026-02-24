@@ -336,15 +336,14 @@ function Outline() {
       const previousVolume = currentVolumeIndex > 0 ? volumes[currentVolumeIndex - 1] : null
       const nextVolume = currentVolumeIndex < volumes.length - 1 ? volumes[currentVolumeIndex + 1] : null
 
-      // 获取上一卷的章节（用于了解剧情进度）
+      // 获取上一卷的章节（用于了解剧情进度）- 从数据库获取确保数据准确
       let previousVolumeChapters: string[] = []
       let previousVolumeSummary: string = ''
       if (previousVolume) {
-        const prevChapters = chapters
-          .filter(c => c.volumeId === previousVolume.id)
-          .sort((a, b) => a.order - b.order)
-          // 🔥 修改：获取所有章节，而不是只有最后5章
-        previousVolumeChapters = prevChapters.map(c =>
+        // 直接从数据库查询上一卷的章节，避免依赖可能过时的 store 数据
+        const prevChaptersFromDb = await window.electron.db.getChapters(previousVolume.id)
+        const prevChapters = prevChaptersFromDb.sort((a: any, b: any) => a.order - b.order)
+        previousVolumeChapters = prevChapters.map((c: any) =>
           `${c.title}: ${c.outline || '(无大纲)'}`
         )
         // 传递上一卷的完整摘要，让AI知道哪些内容已经完成
@@ -403,11 +402,12 @@ function Outline() {
           outline: c.outline
         }))
 
-        // 计算全局章节编号：前面所有卷的章节数 + 当前卷已有章节数 + 1
+        // 计算全局章节编号：从数据库获取前面所有卷的章节数（避免依赖可能过时的 store 数据）
         const volumeIndex = volumes.findIndex(v => v.id === volumeId)
         let chaptersBeforeCurrentVolume = 0
         for (let i = 0; i < volumeIndex; i++) {
-          const volChapters = chapters.filter(c => c.volumeId === volumes[i].id)
+          // 直接从数据库查询每个卷的章节数，确保数据准确
+          const volChapters = await window.electron.db.getChapters(volumes[i].id)
           chaptersBeforeCurrentVolume += volChapters.length
         }
 
@@ -463,10 +463,11 @@ function Outline() {
         }))
         console.log(`👥 [大纲生成] 角色数量: ${characterInfo.length}`)
 
-        // 计算全局章节编号：前面所有卷的章节数 + 当前卷已有章节数 + 1
+        // 计算全局章节编号：从数据库获取前面所有卷的章节数（避免依赖可能过时的 store 数据）
         let chaptersBeforeCurrentVolume = 0
         for (let i = 0; i < volumeIndex; i++) {
-          const volChapters = chapters.filter(c => c.volumeId === volumes[i].id)
+          // 直接从数据库查询每个卷的章节数，确保数据准确
+          const volChapters = await window.electron.db.getChapters(volumes[i].id)
           chaptersBeforeCurrentVolume += volChapters.length
         }
 
@@ -511,37 +512,23 @@ function Outline() {
       setGeneratingProgress(85)
       console.log('💾 [大纲生成] 开始保存章节到数据库...')
 
-      // 创建新章节（不添加"第X章"前缀，因为显示时会动态添加）
-      // 记录已保存的章节ID，如果保存失败需要回滚
-      const savedChapterIds: string[] = []
+      // 使用批量创建方法（事务保证原子性，防止并发时序号重复）
       try {
-        for (let i = 0; i < generatedChapters.length; i++) {
-          const ch = generatedChapters[i]
-          const newChapter = await createChapter({
-            volumeId,
-            title: ch.title,
-            outline: ch.outline
-          })
-          if (newChapter) {
-            savedChapterIds.push(newChapter.id)
-          }
-          setGeneratingProgress(85 + Math.floor((i / generatedChapters.length) * 10))
-        }
+        const chaptersToCreate = generatedChapters.map(ch => ({
+          volumeId,
+          title: ch.title,
+          outline: ch.outline
+        }))
+
+        // 批量创建章节（内部使用事务，确保所有章节序号连续且不重复）
+        const createdChapters = await window.electron.db.createChaptersBatch(chaptersToCreate)
+        console.log(`✅ [大纲生成] 成功保存 ${createdChapters.length} 个章节`)
+
+        setGeneratingProgress(90)
       } catch (saveError: any) {
-        // 保存失败，回滚已保存的章节
-        console.error('❌ [大纲生成] 保存章节失败，开始回滚...', saveError)
-        console.log(`🔄 [大纲生成] 回滚 ${savedChapterIds.length} 个已保存的章节`)
-
-        for (const chapterId of savedChapterIds) {
-          try {
-            await deleteChapter(chapterId)
-          } catch (rollbackError) {
-            console.error('⚠️ [大纲生成] 回滚章节失败:', chapterId, rollbackError)
-          }
-        }
-
-        // 重新抛出错误，让外层catch处理
-        throw new Error(`保存章节失败并已回滚: ${saveError.message}`)
+        // 批量创建失败，事务会自动回滚，无需手动清理
+        console.error('❌ [大纲生成] 批量保存章节失败:', saveError)
+        throw new Error(`保存章节失败: ${saveError.message}`)
       }
 
       setGeneratingProgress(95)

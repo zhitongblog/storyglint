@@ -56,15 +56,15 @@ export async function exportVolumeAsZip(
   const zip = new JSZip()
   const sortedChapters = [...chapters].sort((a, b) => a.order - b.order)
 
-  let chapterIndex = 0
+  // 只对有内容的章节进行编号，确保导出的章节编号连续
+  let exportedChapterCount = 0
   for (const chapter of sortedChapters) {
     if (!chapter.content || chapter.content.trim().length === 0) {
-      chapterIndex++
-      continue // 跳过空章节
+      continue // 跳过空章节，不增加编号
     }
 
-    // 使用全书编号
-    const globalNum = startGlobalChapterNumber + chapterIndex
+    // 使用连续的全书编号（只计算有内容的章节）
+    const globalNum = startGlobalChapterNumber + exportedChapterCount
     const chapterTitle = buildChapterTitle(chapter.title, globalNum)
     const fileName = sanitizeFileName(`${chapterTitle}.txt`)
 
@@ -72,7 +72,7 @@ export async function exportVolumeAsZip(
     const content = formatToTxt(chapter.content)
 
     zip.file(fileName, content)
-    chapterIndex++
+    exportedChapterCount++
   }
 
   // 检查是否有文件被添加
@@ -97,6 +97,7 @@ export async function exportBookAsZip(
   const sortedVolumes = [...volumes].sort((a, b) => a.order - b.order)
 
   let hasContent = false
+  // 只对有内容的章节进行编号，确保导出的章节编号连续
   let globalChapterNum = 0
 
   for (const volume of sortedVolumes) {
@@ -108,10 +109,10 @@ export async function exportBookAsZip(
 
     for (const chapter of sortedChapters) {
       if (!chapter.content || chapter.content.trim().length === 0) {
-        globalChapterNum++
-        continue // 跳过空章节
+        continue // 跳过空章节，不增加编号
       }
 
+      // 使用连续的全书编号（只计算有内容的章节）
       globalChapterNum++
       const chapterTitle = buildChapterTitle(chapter.title, globalChapterNum)
       const fileName = sanitizeFileName(`${chapterTitle}.txt`)
