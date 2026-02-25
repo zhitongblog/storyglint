@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "build:vite": "tsc && vite build",
     "build:win": "tsc && vite build && electron-builder --win --x64",
     "build:mac": "tsc && vite build && electron-builder --mac --x64 --arm64",
     "build:mac:intel": "tsc && vite build && electron-builder --mac --x64",

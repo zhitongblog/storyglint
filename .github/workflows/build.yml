@@ -42,9 +42,31 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # 只运行对应平台的构建命令，禁用自动发布
-      - name: Build application
-        run: ${{ matrix.build_cmd }} -- --publish never
+      # 先编译 TypeScript 和 Vite 构建
+      - name: Build with Vite
+        run: npm run build:vite
+        env:
+          NODE_ENV: production
+
+      # 显示构建产物，用于调试
+      - name: List build output
+        run: |
+          echo "=== dist directory ==="
+          ls -la dist/ || echo "dist not found"
+          echo "=== dist-electron directory ==="
+          ls -la dist-electron/ || echo "dist-electron not found"
+
+      # 运行 electron-builder 打包
+      - name: Package with electron-builder
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            npx electron-builder --win --x64 --publish never
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            npx electron-builder --mac --x64 --arm64 --publish never
+          else
+            npx electron-builder --linux deb --x64 --publish never
+          fi
+        shell: bash
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
