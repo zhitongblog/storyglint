@@ -278,13 +278,14 @@ function GlobalSettings() {
 
   // 保存 API Key
   const handleSaveApiKey = async () => {
+    // 如果密钥未修改且已配置，不需要保存
     if (!isKeyModified && aiConfigured) {
       return
     }
 
-    if (currentApiKey.includes('••••')) {
-      return
-    }
+    // 只有当用户没有修改密钥时（isKeyModified 为 false），才检查是否为遮蔽值
+    // 如果 isKeyModified 为 true，说明用户输入了新密钥，即使包含特殊字符也应该保存
+    // 注意：不再使用 includes('••••') 检查，因为这可能误判用户输入的真实密钥
 
     if (!currentApiKey.trim()) {
       message.warning('请输入 API Key')

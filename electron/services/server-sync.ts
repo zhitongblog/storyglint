@@ -60,6 +60,10 @@ export class ServerSyncService {
     try {
       console.log('[ServerSync] 开始同步...')
 
+      // 动态获取最新的服务端地址（登录后可能会变化）
+      this.serverUrl = this.authService.getServerUrl()
+      console.log('[ServerSync] 服务端地址:', this.serverUrl)
+
       // 检查登录状态
       if (!this.authService.isLoggedIn()) {
         return {
@@ -278,6 +282,9 @@ export class ServerSyncService {
    * 上传单个项目
    */
   async uploadProject(project: Project, accessToken?: string): Promise<void> {
+    // 动态获取最新的服务端地址
+    this.serverUrl = this.authService.getServerUrl()
+
     const token = accessToken || this.authService.getAccessToken()
     if (!token) {
       throw new Error('无法获取访问令牌')
@@ -325,6 +332,9 @@ export class ServerSyncService {
    * @returns 返回章节冲突信息（如果有的话）
    */
   async downloadProject(projectId: string, accessToken?: string): Promise<ChapterConflict[]> {
+    // 动态获取最新的服务端地址
+    this.serverUrl = this.authService.getServerUrl()
+
     const token = accessToken || this.authService.getAccessToken()
     if (!token) {
       throw new Error('无法获取访问令牌')
@@ -365,6 +375,9 @@ export class ServerSyncService {
    */
   async batchUpload(projectIds: string[]): Promise<SyncResult> {
     try {
+      // 动态获取最新的服务端地址
+      this.serverUrl = this.authService.getServerUrl()
+
       const token = this.authService.getAccessToken()
       if (!token) {
         throw new Error('无法获取访问令牌')
@@ -437,6 +450,9 @@ export class ServerSyncService {
   }> {
     try {
       console.log('[ServerSync] 开始从服务端恢复数据...')
+
+      // 动态获取最新的服务端地址
+      this.serverUrl = this.authService.getServerUrl()
 
       const token = this.authService.getAccessToken()
       if (!token) {
@@ -602,6 +618,9 @@ export class ServerSyncService {
    * 从服务端删除项目
    */
   async deleteServerProject(projectId: string, accessToken?: string): Promise<void> {
+    // 动态获取最新的服务端地址
+    this.serverUrl = this.authService.getServerUrl()
+
     const token = accessToken || this.authService.getAccessToken()
     if (!token) {
       throw new Error('无法获取访问令牌')
