@@ -63,52 +63,116 @@ async function addTextToCover(
       // 绘制背景图
       ctx.drawImage(img, 0, 0)
 
-      // 添加半透明渐变遮罩（顶部和底部）
-      const gradientTop = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.4)
-      gradientTop.addColorStop(0, 'rgba(0, 0, 0, 0.6)')
-      gradientTop.addColorStop(1, 'rgba(0, 0, 0, 0)')
-      ctx.fillStyle = gradientTop
-      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.4)
-
-      const gradientBottom = ctx.createLinearGradient(0, canvas.height * 0.7, 0, canvas.height)
+      // 添加底部渐变遮罩（更大范围、更明显）
+      const gradientBottom = ctx.createLinearGradient(0, canvas.height * 0.45, 0, canvas.height)
       gradientBottom.addColorStop(0, 'rgba(0, 0, 0, 0)')
-      gradientBottom.addColorStop(1, 'rgba(0, 0, 0, 0.6)')
+      gradientBottom.addColorStop(0.3, 'rgba(0, 0, 0, 0.3)')
+      gradientBottom.addColorStop(0.6, 'rgba(0, 0, 0, 0.6)')
+      gradientBottom.addColorStop(1, 'rgba(0, 0, 0, 0.85)')
       ctx.fillStyle = gradientBottom
-      ctx.fillRect(0, canvas.height * 0.7, canvas.width, canvas.height * 0.3)
+      ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55)
 
       // 计算字体大小（根据画布宽度）
-      const titleFontSize = Math.floor(canvas.width / 8)
-      const authorFontSize = Math.floor(canvas.width / 16)
+      const titleFontSize = Math.floor(canvas.width / 9)
+      const authorFontSize = Math.floor(canvas.width / 20)
 
-      // 绘制书名（顶部居中）
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'top'
+      // 文字绘制辅助函数 - 带描边效果
+      const drawTextWithStroke = (
+        text: string,
+        x: number,
+        y: number,
+        fontSize: number,
+        fillColor: string,
+        strokeColor: string,
+        strokeWidth: number
+      ) => {
+        ctx.font = `bold ${fontSize}px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`
+        ctx.textAlign = 'center'
+        ctx.lineWidth = strokeWidth
+        ctx.strokeStyle = strokeColor
+        ctx.fillStyle = fillColor
+        // 先描边
+        ctx.strokeText(text, x, y)
+        // 再填充
+        ctx.fillText(text, x, y)
+      }
 
-      // 书名阴影
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'
-      ctx.shadowBlur = 10
-      ctx.shadowOffsetX = 2
-      ctx.shadowOffsetY = 2
-
-      // 书名样式
+      // 计算书名位置（底部区域，在作者名上方）
+      const maxWidth = canvas.width * 0.85
       ctx.font = `bold ${titleFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
-      ctx.fillStyle = '#ffffff'
-
-      // 如果书名太长，分行显示
-      const maxWidth = canvas.width * 0.8
       const titleLines = wrapText(ctx, title, maxWidth)
-      const titleY = canvas.height * 0.12
+      const lineHeight = titleFontSize * 1.25
+      const totalTitleHeight = titleLines.length * lineHeight
 
+      // 作者名位置
+      const authorY = canvas.height * 0.92
+
+      // 书名起始位置（在作者名上方，留出间距）
+      const titleStartY = authorY - authorFontSize * 2.5 - totalTitleHeight
+
+      // 添加书名背景装饰条
+      const decorY = titleStartY - titleFontSize * 0.3
+      const decorHeight = totalTitleHeight + titleFontSize * 0.6
+      const decorGradient = ctx.createLinearGradient(
+        canvas.width * 0.1, 0,
+        canvas.width * 0.9, 0
+      )
+      decorGradient.addColorStop(0, 'rgba(255, 215, 0, 0)')
+      decorGradient.addColorStop(0.2, 'rgba(255, 215, 0, 0.15)')
+      decorGradient.addColorStop(0.5, 'rgba(255, 215, 0, 0.2)')
+      decorGradient.addColorStop(0.8, 'rgba(255, 215, 0, 0.15)')
+      decorGradient.addColorStop(1, 'rgba(255, 215, 0, 0)')
+      ctx.fillStyle = decorGradient
+      ctx.fillRect(0, decorY, canvas.width, decorHeight)
+
+      // 绘制书名（底部区域，带描边）
+      ctx.textBaseline = 'top'
       titleLines.forEach((line, index) => {
-        ctx.fillText(line, canvas.width / 2, titleY + index * (titleFontSize * 1.3))
+        const y = titleStartY + index * lineHeight
+        // 外层阴影
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'
+        ctx.shadowBlur = 15
+        ctx.shadowOffsetX = 3
+        ctx.shadowOffsetY = 3
+        drawTextWithStroke(line, canvas.width / 2, y, titleFontSize, '#ffffff', 'rgba(0, 0, 0, 0.6)', 4)
       })
+
+      // 重置阴影
+      ctx.shadowColor = 'transparent'
+      ctx.shadowBlur = 0
+
+      // 绘制分隔线
+      const separatorY = authorY - authorFontSize * 1.5
+      const separatorGradient = ctx.createLinearGradient(
+        canvas.width * 0.25, 0,
+        canvas.width * 0.75, 0
+      )
+      separatorGradient.addColorStop(0, 'rgba(255, 215, 0, 0)')
+      separatorGradient.addColorStop(0.5, 'rgba(255, 215, 0, 0.6)')
+      separatorGradient.addColorStop(1, 'rgba(255, 215, 0, 0)')
+      ctx.strokeStyle = separatorGradient
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(canvas.width * 0.25, separatorY)
+      ctx.lineTo(canvas.width * 0.75, separatorY)
+      ctx.stroke()
 
       // 绘制作者名（底部居中）
       if (author) {
-        ctx.font = `${authorFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
-        ctx.fillStyle = '#e0e0e0'
         ctx.textBaseline = 'bottom'
-        ctx.fillText(`作者：${author}`, canvas.width / 2, canvas.height * 0.92)
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)'
+        ctx.shadowBlur = 8
+        ctx.shadowOffsetX = 2
+        ctx.shadowOffsetY = 2
+        drawTextWithStroke(
+          `作者：${author}`,
+          canvas.width / 2,
+          authorY,
+          authorFontSize,
+          '#e8e8e8',
+          'rgba(0, 0, 0, 0.5)',
+          2
+        )
       }
 
       // 重置阴影
