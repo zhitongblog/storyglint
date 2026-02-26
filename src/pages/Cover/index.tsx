@@ -4,6 +4,7 @@ import { Card, Input, Button, Spin, message, Select, Checkbox, Space, Divider } 
 import { PictureOutlined, DownloadOutlined, RobotOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import { useProjectStore } from '../../stores/project'
 import { isGeminiReady, initGemini, generateCoverImage, getCurrentModelName } from '../../services/gemini'
+import { getConfiguredApiKey } from '../../utils'
 
 // 扩展的风格选项
 const styleOptions = [
@@ -199,7 +200,7 @@ function Cover() {
   // 初始化 Gemini
   useEffect(() => {
     const initApi = async () => {
-      const apiKey = await window.electron.settings.get('geminiApiKey')
+      const apiKey = await getConfiguredApiKey()
       if (apiKey) {
         await initGemini(apiKey)
       }

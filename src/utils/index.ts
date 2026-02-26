@@ -124,3 +124,19 @@ export function calculateReadingTime(wordCount: number): number {
   // 假设平均阅读速度为每分钟 400 字
   return Math.ceil(wordCount / 400)
 }
+
+/**
+ * 获取当前配置的 AI API Key
+ * 优先从新的 aiProviderConfigs 读取，向后兼容旧的 geminiApiKey
+ */
+export async function getConfiguredApiKey(): Promise<string | null> {
+  const provider = await window.electron.settings.get('aiProvider') as string | null
+  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
+
+  if (configs && provider && configs[provider]?.apiKey) {
+    return configs[provider].apiKey
+  }
+  // 向后兼容：尝试旧的 geminiApiKey
+  const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
+  return oldKey || null
+}

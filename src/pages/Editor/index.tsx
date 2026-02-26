@@ -45,6 +45,7 @@ import {
   buildDeathConfirmationPrompt,
   detectCharacterAppearances
 } from '../../services/character-utils'
+import { getConfiguredApiKey } from '../../utils'
 import {
   writeChapterStrict,
   autoWriteAll,
@@ -143,7 +144,7 @@ function Editor() {
   // 初始化 Gemini
   useEffect(() => {
     const initApi = async () => {
-      const apiKey = await window.electron.settings.get('geminiApiKey')
+      const apiKey = await getConfiguredApiKey()
       if (apiKey) {
         await initGemini(apiKey)
       }

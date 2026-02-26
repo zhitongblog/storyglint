@@ -34,6 +34,7 @@ import { useProjectStore } from '../../stores/project'
 import { generateVolumeChapters, generateChaptersOneByOne } from '../../services/auto-create'
 import { isGeminiReady, initGemini } from '../../services/gemini'
 import { extractAllVolumeKeyPoints } from '../../services/outline-optimizer'
+import { getConfiguredApiKey } from '../../utils'
 import type { Chapter } from '../../types'
 
 const { TextArea } = Input
@@ -216,7 +217,7 @@ function Outline() {
 
   useEffect(() => {
     const initApi = async () => {
-      const apiKey = await window.electron.settings.get('geminiApiKey')
+      const apiKey = await getConfiguredApiKey()
       if (apiKey) {
         await initGemini(apiKey)
       }

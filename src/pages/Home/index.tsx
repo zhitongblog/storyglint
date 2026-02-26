@@ -58,6 +58,19 @@ function Home() {
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false)
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
 
+  // 获取当前配置的 API Key
+  const getConfiguredApiKey = async (): Promise<string | null> => {
+    const provider = await window.electron.settings.get('aiProvider') as string
+    const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
+
+    if (configs && provider && configs[provider]?.apiKey) {
+      return configs[provider].apiKey
+    }
+    // 向后兼容：尝试旧的 geminiApiKey
+    const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
+    return oldKey || null
+  }
+
   // AI 生成书名
   const handleGenerateTitle = async () => {
     if (!formData.inspiration.trim()) {
@@ -65,9 +78,9 @@ function Home() {
       return
     }
 
-    const apiKey = await window.electron.settings.get('geminiApiKey')
+    const apiKey = await getConfiguredApiKey()
     if (!apiKey) {
-      message.error('请先在全局设置中配置 Gemini API Key')
+      message.error('请先在全局设置中配置 API Key')
       return
     }
 
@@ -133,10 +146,10 @@ function Home() {
       return
     }
 
-    // 检查 Gemini API
-    const apiKey = await window.electron.settings.get('geminiApiKey')
+    // 检查 AI API
+    const apiKey = await getConfiguredApiKey()
     if (!apiKey) {
-      message.error('请先在全局设置中配置 Gemini API Key')
+      message.error('请先在全局设置中配置 API Key')
       navigate('/settings')
       return
     }
