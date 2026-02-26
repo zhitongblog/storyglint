@@ -139,6 +139,13 @@ function GlobalSettings() {
         const savedProvider = await window.electron.settings.get('aiProvider')
         const savedProviderConfigs = await window.electron.settings.get('aiProviderConfigs')
 
+        console.log('[GlobalSettings] 加载配置:', {
+          provider: savedProvider,
+          hasConfigs: !!savedProviderConfigs,
+          // 只显示密钥是否存在，不显示实际值
+          configuredProviders: savedProviderConfigs ? Object.keys(savedProviderConfigs) : []
+        })
+
         if (savedProviderConfigs) {
           setProviderConfigs(savedProviderConfigs as Record<string, { apiKey: string; model: string }>)
         }
@@ -150,6 +157,12 @@ function GlobalSettings() {
 
           const config = (savedProviderConfigs as Record<string, { apiKey: string; model: string }>)?.[savedProvider as string]
           if (config?.apiKey) {
+            // 检查加载的 API key 是否是遮蔽的（这表示之前的保存有问题）
+            if (config.apiKey.includes('••••')) {
+              console.error('[GlobalSettings] 错误：加载到了遮蔽的 API key！')
+            } else {
+              console.log('[GlobalSettings] API key 加载成功（长度:', config.apiKey.length, '）')
+            }
             setCurrentApiKey(maskKey(config.apiKey))
             setAiConfigured(true)
             if (config.model) {
@@ -283,12 +296,19 @@ function GlobalSettings() {
       return
     }
 
-    // 只有当用户没有修改密钥时（isKeyModified 为 false），才检查是否为遮蔽值
-    // 如果 isKeyModified 为 true，说明用户输入了新密钥，即使包含特殊字符也应该保存
-    // 注意：不再使用 includes('••••') 检查，因为这可能误判用户输入的真实密钥
+    // 立即保存当前输入的密钥副本，避免异步操作期间 state 变化
+    const apiKeyToSave = currentApiKey.trim()
 
-    if (!currentApiKey.trim()) {
+    if (!apiKeyToSave) {
       message.warning('请输入 API Key')
+      return
+    }
+
+    // 安全检查：确保不会保存遮蔽的密钥
+    // 遮蔽字符 •（U+2022）不太可能出现在真实的 API 密钥中
+    if (apiKeyToSave.includes('••••')) {
+      console.warn('[GlobalSettings] 检测到遮蔽密钥，不保存')
+      message.warning('请输入新的 API Key')
       return
     }
 
@@ -297,20 +317,26 @@ function GlobalSettings() {
       const newConfigs = {
         ...providerConfigs,
         [selectedProvider]: {
-          apiKey: currentApiKey,
+          apiKey: apiKeyToSave,
           model: selectedModel
         }
       }
-      setProviderConfigs(newConfigs)
+
+      // 先保存到存储，确保持久化
       await window.electron.settings.set('aiProviderConfigs', newConfigs)
+      // 再更新 React state
+      setProviderConfigs(newConfigs)
+
+      console.log('[GlobalSettings] API Key 已保存到存储')
 
       // 初始化 AI
-      const success = await initAI(currentApiKey, selectedModel)
+      const success = await initAI(apiKeyToSave, selectedModel)
       if (success) {
         message.success(`${PROVIDER_INFO[selectedProvider].name} API Key 已保存并验证成功`)
         setAiConfigured(true)
         setIsKeyModified(false)
-        setCurrentApiKey(maskKey(currentApiKey))
+        // 使用保存的副本进行遮蔽，确保一致性
+        setCurrentApiKey(maskKey(apiKeyToSave))
         handleCheckQuota()
       } else {
         message.warning('API Key 已保存，但验证失败，请检查是否正确')
