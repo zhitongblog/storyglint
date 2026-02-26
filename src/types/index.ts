@@ -14,6 +14,7 @@ export interface Project {
   createdAt: string
   updatedAt: string
   syncedAt?: string
+  version?: number          // 版本号，用于云同步时比较
 }
 
 // 卷

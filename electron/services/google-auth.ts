@@ -201,7 +201,7 @@ export class GoogleAuthService {
       }
 
       console.log('[GoogleAuth] 登录成功！')
-      return { success: true, user }
+      return { success: true, user: user || undefined }
     } catch (error: any) {
       console.error('[GoogleAuth] 登录失败:', error)
       console.error('[GoogleAuth] 错误详情:', error.response?.data || error.message)

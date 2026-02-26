@@ -220,9 +220,4 @@ const electronAPI: ElectronAPI = {
 
 contextBridge.exposeInMainWorld('electron', electronAPI)
 
-// 声明全局类型
-declare global {
-  interface Window {
-    electron: ElectronAPI
-  }
-}
+// 全局类型声明已在 src/types/index.ts 中定义
