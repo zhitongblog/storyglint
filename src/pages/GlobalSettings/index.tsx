@@ -323,11 +323,13 @@ function GlobalSettings() {
       }
 
       // 先保存到存储，确保持久化
+      // 重要：同时保存 aiProvider 和 aiProviderConfigs，确保加载时能正确识别
+      await window.electron.settings.set('aiProvider', selectedProvider)
       await window.electron.settings.set('aiProviderConfigs', newConfigs)
       // 再更新 React state
       setProviderConfigs(newConfigs)
 
-      console.log('[GlobalSettings] API Key 已保存到存储')
+      console.log('[GlobalSettings] API Key 已保存到存储, provider:', selectedProvider)
 
       // 初始化 AI
       const success = await initAI(apiKeyToSave, selectedModel)
