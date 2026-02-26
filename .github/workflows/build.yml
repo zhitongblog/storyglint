@@ -50,6 +50,7 @@ jobs:
 
       # 显示构建产物，用于调试
       - name: List build output
+        shell: bash
         run: |
           echo "=== dist directory ==="
           ls -la dist/ || echo "dist not found"
