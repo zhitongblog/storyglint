@@ -261,6 +261,42 @@ export function setupIpcHandlers(ipcMain: IpcMain, services: Services) {
     shell.openExternal(url)
   })
 
+  // ==================== 数据恢复 ====================
+
+  // 选择外部数据库文件
+  ipcMain.handle('recovery:selectDatabase', async () => {
+    const { dialog } = require('electron')
+    const result = await dialog.showOpenDialog(mainWindow()!, {
+      title: '选择要恢复的数据库文件',
+      filters: [
+        { name: 'SQLite 数据库', extensions: ['db'] },
+        { name: '所有文件', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true }
+    }
+
+    return { success: true, filePath: result.filePaths[0] }
+  })
+
+  // 读取外部数据库中的项目列表
+  ipcMain.handle('recovery:readDatabase', async (_, dbPath: string) => {
+    return database.readExternalDatabase(dbPath)
+  })
+
+  // 从外部数据库导入指定项目
+  ipcMain.handle('recovery:importProject', async (_, dbPath: string, projectId: string) => {
+    return database.importFromExternalDatabase(dbPath, projectId)
+  })
+
+  // 获取用户数据目录路径（帮助用户找到数据库位置）
+  ipcMain.handle('recovery:getUserDataPath', () => {
+    return app.getPath('userData')
+  })
+
   // ==================== AI API 请求（通过主进程代理） ====================
 
   ipcMain.handle('ai:fetch', async (_, url: string, options: {

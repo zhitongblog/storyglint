@@ -506,6 +506,31 @@ export interface ElectronAPI {
       body?: string
     }) => Promise<{ ok: boolean; status: number; data: any; error?: string }>
   }
+
+  // 数据恢复
+  recovery: {
+    selectDatabase: () => Promise<{ success: boolean; canceled?: boolean; filePath?: string }>
+    readDatabase: (dbPath: string) => Promise<{
+      success: boolean
+      projects?: Array<{
+        id: string
+        title: string
+        volumeCount: number
+        chapterCount: number
+        characterCount: number
+        totalWords: number
+        createdAt: string
+        updatedAt: string
+      }>
+      error?: string
+    }>
+    importProject: (dbPath: string, projectId: string) => Promise<{
+      success: boolean
+      newProjectId?: string
+      error?: string
+    }>
+    getUserDataPath: () => Promise<string>
+  }
 }
 
 declare global {

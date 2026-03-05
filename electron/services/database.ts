@@ -1056,6 +1056,164 @@ export class DatabaseService {
     }
   }
 
+  /**
+   * 从外部数据库文件读取所有项目数据
+   * @param externalDbPath 外部数据库文件路径
+   * @returns 项目列表及其关联数据
+   */
+  readExternalDatabase(externalDbPath: string): {
+    success: boolean
+    projects?: any[]
+    error?: string
+  } {
+    try {
+      const fs = require('fs')
+      if (!fs.existsSync(externalDbPath)) {
+        return { success: false, error: '数据库文件不存在' }
+      }
+
+      // 打开外部数据库（只读模式）
+      const externalDb = new Database(externalDbPath, { readonly: true })
+
+      // 读取所有项目
+      const projectsStmt = externalDb.prepare('SELECT * FROM projects ORDER BY updated_at DESC')
+      const projectRows = projectsStmt.all()
+
+      const projects = projectRows.map((row: any) => {
+        const project = {
+          id: row.id,
+          title: row.title,
+          inspiration: row.inspiration,
+          constraints: row.constraints,
+          scale: row.scale,
+          genres: JSON.parse(row.genres || '[]'),
+          styles: JSON.parse(row.styles || '[]'),
+          worldSetting: row.world_setting,
+          summary: row.summary,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        }
+
+        // 读取该项目的卷
+        const volumesStmt = externalDb.prepare('SELECT * FROM volumes WHERE project_id = ? ORDER BY sort_order ASC')
+        const volumeRows = volumesStmt.all(row.id)
+        const volumes = volumeRows.map((v: any) => ({
+          id: v.id,
+          projectId: v.project_id,
+          title: v.title,
+          summary: v.summary,
+          order: v.sort_order,
+          keyPoints: v.key_points ? JSON.parse(v.key_points) : [],
+          briefChapters: v.brief_chapters ? JSON.parse(v.brief_chapters) : [],
+          mainPlot: v.main_plot || '',
+          keyEvents: v.key_events ? JSON.parse(v.key_events) : [],
+          createdAt: v.created_at,
+          updatedAt: v.updated_at
+        }))
+
+        // 读取章节
+        const chapters: any[] = []
+        for (const volume of volumes) {
+          const chaptersStmt = externalDb.prepare('SELECT * FROM chapters WHERE volume_id = ? ORDER BY sort_order ASC')
+          const chapterRows = chaptersStmt.all(volume.id)
+          for (const ch of chapterRows) {
+            chapters.push({
+              id: (ch as any).id,
+              volumeId: (ch as any).volume_id,
+              title: (ch as any).title,
+              outline: (ch as any).outline,
+              content: (ch as any).content,
+              wordCount: (ch as any).word_count,
+              order: (ch as any).sort_order,
+              createdAt: (ch as any).created_at,
+              updatedAt: (ch as any).updated_at
+            })
+          }
+        }
+
+        // 读取角色
+        const charactersStmt = externalDb.prepare('SELECT * FROM characters WHERE project_id = ?')
+        const characterRows = charactersStmt.all(row.id)
+        const characters = characterRows.map((c: any) => ({
+          id: c.id,
+          projectId: c.project_id,
+          name: c.name,
+          role: c.role,
+          gender: c.gender,
+          age: c.age,
+          identity: c.identity,
+          description: c.description,
+          arc: c.arc,
+          status: c.status,
+          deathChapter: c.death_chapter || '',
+          appearances: JSON.parse(c.appearances || '[]'),
+          relationships: JSON.parse(c.relationships || '[]'),
+          createdAt: c.created_at,
+          updatedAt: c.updated_at
+        }))
+
+        // 统计信息
+        const totalWords = chapters.reduce((sum, ch) => sum + (ch.wordCount || 0), 0)
+
+        return {
+          ...project,
+          volumes,
+          chapters,
+          characters,
+          volumeCount: volumes.length,
+          chapterCount: chapters.length,
+          characterCount: characters.length,
+          totalWords
+        }
+      })
+
+      externalDb.close()
+
+      return { success: true, projects }
+
+    } catch (error: any) {
+      console.error('[Database] 读取外部数据库失败:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
+   * 从外部数据库导入指定项目
+   * @param externalDbPath 外部数据库文件路径
+   * @param projectId 要导入的项目ID
+   * @returns 导入结果
+   */
+  importFromExternalDatabase(
+    externalDbPath: string,
+    projectId: string
+  ): { success: boolean; newProjectId?: string; error?: string } {
+    try {
+      const result = this.readExternalDatabase(externalDbPath)
+      if (!result.success || !result.projects) {
+        return { success: false, error: result.error || '无法读取外部数据库' }
+      }
+
+      const projectData = result.projects.find(p => p.id === projectId)
+      if (!projectData) {
+        return { success: false, error: '未找到指定的项目' }
+      }
+
+      // 使用现有的导入方法
+      const importResult = this.importProjectData({
+        project: projectData,
+        volumes: projectData.volumes,
+        chapters: projectData.chapters,
+        characters: projectData.characters
+      }, { generateNewIds: true })
+
+      return importResult
+
+    } catch (error: any) {
+      console.error('[Database] 导入项目失败:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
   // ==================== 同步辅助方法 ====================
 
   /**

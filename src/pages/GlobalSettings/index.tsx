@@ -120,6 +120,13 @@ function GlobalSettings() {
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'success' | 'error'>('unknown')
 
+  // 数据恢复
+  const [recoveryDbPath, setRecoveryDbPath] = useState<string | null>(null)
+  const [recoveryProjects, setRecoveryProjects] = useState<any[]>([])
+  const [isLoadingRecovery, setIsLoadingRecovery] = useState(false)
+  const [selectedRecoveryProjects, setSelectedRecoveryProjects] = useState<string[]>([])
+  const [isImporting, setIsImporting] = useState(false)
+
   // 获取当前提供商的可用模型
   const currentProviderModels = getAllModels()[selectedProvider] || {}
 
@@ -537,6 +544,116 @@ function GlobalSettings() {
     } finally {
       setIsTestingConnection(false)
     }
+  }
+
+  // ==================== 数据恢复 ====================
+
+  // 选择外部数据库文件
+  const handleSelectRecoveryDatabase = async () => {
+    const result = await window.electron.recovery.selectDatabase()
+    if (result.canceled || !result.success || !result.filePath) {
+      return
+    }
+
+    setRecoveryDbPath(result.filePath)
+    setIsLoadingRecovery(true)
+    setRecoveryProjects([])
+    setSelectedRecoveryProjects([])
+
+    try {
+      const readResult = await window.electron.recovery.readDatabase(result.filePath)
+      if (readResult.success && readResult.projects) {
+        setRecoveryProjects(readResult.projects)
+        if (readResult.projects.length === 0) {
+          message.info('所选数据库中没有找到项目')
+        }
+      } else {
+        message.error(readResult.error || '读取数据库失败')
+      }
+    } catch (error: any) {
+      message.error(`读取失败: ${error.message}`)
+    } finally {
+      setIsLoadingRecovery(false)
+    }
+  }
+
+  // 导入选中的项目
+  const handleImportProjects = async () => {
+    if (!recoveryDbPath || selectedRecoveryProjects.length === 0) {
+      message.warning('请先选择要恢复的项目')
+      return
+    }
+
+    setIsImporting(true)
+    const hideLoading = message.loading(`正在导入 ${selectedRecoveryProjects.length} 个项目...`, 0)
+
+    try {
+      let successCount = 0
+      let failCount = 0
+
+      for (const projectId of selectedRecoveryProjects) {
+        const result = await window.electron.recovery.importProject(recoveryDbPath, projectId)
+        if (result.success) {
+          successCount++
+        } else {
+          failCount++
+          console.error(`导入项目失败: ${result.error}`)
+        }
+      }
+
+      hideLoading()
+
+      if (failCount === 0) {
+        message.success(`成功导入 ${successCount} 个项目`)
+      } else {
+        message.warning(`导入完成: ${successCount} 个成功, ${failCount} 个失败`)
+      }
+
+      // 清理状态
+      setRecoveryDbPath(null)
+      setRecoveryProjects([])
+      setSelectedRecoveryProjects([])
+
+    } catch (error: any) {
+      hideLoading()
+      message.error(`导入失败: ${error.message}`)
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  // 获取用户数据目录
+  const handleShowUserDataPath = async () => {
+    const path = await window.electron.recovery.getUserDataPath()
+    Modal.info({
+      title: '数据库文件位置说明',
+      width: 600,
+      content: (
+        <div className="space-y-4">
+          <p>StoryGlint 的数据库文件位于应用数据目录中。</p>
+          <div className="bg-dark-hover p-3 rounded">
+            <p className="text-dark-muted text-xs mb-1">当前应用的数据目录：</p>
+            <code className="text-dark-text break-all">{path}</code>
+          </div>
+          <p className="text-dark-muted text-sm">
+            如果您需要从另一个安装的 StoryGlint（或旧版 NovaScribe）恢复数据，
+            请找到对应应用的数据目录，其中的 <code>storyglint.db</code> 或 <code>novascribe.db</code> 就是数据库文件。
+          </p>
+          <p className="text-dark-muted text-sm">
+            <strong>常见路径：</strong>
+            <br />• Windows: <code>C:\Users\用户名\AppData\Roaming\应用名\</code>
+            <br />• macOS: <code>~/Library/Application Support/应用名/</code>
+            <br />• Linux: <code>~/.config/应用名/</code>
+          </p>
+        </div>
+      )
+    })
+  }
+
+  // 格式化字数
+  const formatWordCount = (count: number): string => {
+    if (count < 10000) return `${count}字`
+    return `${(count / 10000).toFixed(1)}万字`
   }
 
   // 保存服务端地址
@@ -1391,6 +1508,133 @@ function GlobalSettings() {
           >
             保存配置
           </Button>
+        </div>
+      </Card>
+
+      {/* 数据恢复 */}
+      <Card
+        title={
+          <Space>
+            <CloudServerOutlined className="text-orange-500" />
+            <span>数据恢复</span>
+          </Space>
+        }
+        className="mt-6"
+        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
+      >
+        <Alert
+          message="从外部数据库恢复数据"
+          description="如果您需要从另一台电脑或旧版本的应用中恢复数据，可以选择对应的数据库文件（.db）进行导入。"
+          type="info"
+          showIcon
+          className="mb-4"
+        />
+
+        <div className="space-y-4">
+          {/* 选择数据库文件 */}
+          <div className="flex gap-2">
+            <Button
+              icon={<CloudServerOutlined />}
+              onClick={handleSelectRecoveryDatabase}
+              loading={isLoadingRecovery}
+            >
+              选择数据库文件
+            </Button>
+            <Button
+              icon={<QuestionCircleOutlined />}
+              onClick={handleShowUserDataPath}
+            >
+              如何找到数据库？
+            </Button>
+          </div>
+
+          {/* 显示选中的数据库路径 */}
+          {recoveryDbPath && (
+            <div className="bg-dark-hover p-3 rounded">
+              <p className="text-dark-muted text-xs mb-1">已选择数据库：</p>
+              <code className="text-dark-text text-sm break-all">{recoveryDbPath}</code>
+            </div>
+          )}
+
+          {/* 项目列表 */}
+          {recoveryProjects.length > 0 && (
+            <div className="border border-dark-border rounded-lg overflow-hidden">
+              <div className="bg-dark-hover px-4 py-2 flex items-center justify-between">
+                <span className="text-dark-text font-medium">
+                  找到 {recoveryProjects.length} 个项目
+                </span>
+                <Space>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      if (selectedRecoveryProjects.length === recoveryProjects.length) {
+                        setSelectedRecoveryProjects([])
+                      } else {
+                        setSelectedRecoveryProjects(recoveryProjects.map(p => p.id))
+                      }
+                    }}
+                  >
+                    {selectedRecoveryProjects.length === recoveryProjects.length ? '取消全选' : '全选'}
+                  </Button>
+                </Space>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {recoveryProjects.map(project => (
+                  <div
+                    key={project.id}
+                    className={`
+                      px-4 py-3 border-b border-dark-border last:border-b-0
+                      cursor-pointer hover:bg-dark-hover transition-colors
+                      ${selectedRecoveryProjects.includes(project.id) ? 'bg-dark-hover' : ''}
+                    `}
+                    onClick={() => {
+                      if (selectedRecoveryProjects.includes(project.id)) {
+                        setSelectedRecoveryProjects(prev => prev.filter(id => id !== project.id))
+                      } else {
+                        setSelectedRecoveryProjects(prev => [...prev, project.id])
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedRecoveryProjects.includes(project.id)}
+                        onChange={() => {}}
+                        className="w-4 h-4"
+                      />
+                      <div className="flex-1">
+                        <div className="text-dark-text font-medium">{project.title}</div>
+                        <div className="text-dark-muted text-sm flex gap-4">
+                          <span>{project.genre || '未知类型'}</span>
+                          <span>{project.volumeCount || 0} 卷</span>
+                          <span>{project.chapterCount || 0} 章</span>
+                          <span>{formatWordCount(project.totalWords || 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 导入按钮 */}
+          {recoveryProjects.length > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-dark-muted">
+                已选择 {selectedRecoveryProjects.length} 个项目
+              </span>
+              <Button
+                type="primary"
+                icon={<CloudServerOutlined />}
+                onClick={handleImportProjects}
+                loading={isImporting}
+                disabled={selectedRecoveryProjects.length === 0}
+              >
+                导入选中的项目
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 

@@ -215,6 +215,13 @@ const electronAPI: ElectronAPI = {
 
   ai: {
     fetch: (url, options) => ipcRenderer.invoke('ai:fetch', url, options)
+  },
+
+  recovery: {
+    selectDatabase: () => ipcRenderer.invoke('recovery:selectDatabase'),
+    readDatabase: (dbPath) => ipcRenderer.invoke('recovery:readDatabase', dbPath),
+    importProject: (dbPath, projectId) => ipcRenderer.invoke('recovery:importProject', dbPath, projectId),
+    getUserDataPath: () => ipcRenderer.invoke('recovery:getUserDataPath')
   }
 }
 
