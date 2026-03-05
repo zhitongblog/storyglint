@@ -15,7 +15,7 @@ import {
 import { useProjectStore } from '../../stores/project'
 import { SCALE_OPTIONS, GENRE_CATEGORIES, getAuthorsForGenres } from '../../types'
 import { autoCreateNovel } from '../../services/auto-create'
-import { isGeminiReady, initGemini, generateBookTitle } from '../../services/gemini'
+import { isAIReady, initAI, setProvider, getCurrentProviderType, generateBookTitle } from '../../services/ai'
 import { ErrorPage, parseError, type ErrorInfo } from '../../components/ErrorDisplay'
 type CheckboxValueType = string | number | boolean
 
@@ -58,17 +58,24 @@ function Home() {
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false)
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([])
 
-  // 获取当前配置的 API Key
-  const getConfiguredApiKey = async (): Promise<string | null> => {
+  // 获取当前配置的 AI 提供商信息
+  const getAIConfig = async (): Promise<{ provider: string; apiKey: string; model: string } | null> => {
     const provider = await window.electron.settings.get('aiProvider') as string
     const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
 
     if (configs && provider && configs[provider]?.apiKey) {
-      return configs[provider].apiKey
+      return {
+        provider,
+        apiKey: configs[provider].apiKey,
+        model: configs[provider].model || ''
+      }
     }
     // 向后兼容：尝试旧的 geminiApiKey
     const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
-    return oldKey || null
+    if (oldKey) {
+      return { provider: 'gemini', apiKey: oldKey, model: '' }
+    }
+    return null
   }
 
   // AI 生成书名
@@ -78,14 +85,17 @@ function Home() {
       return
     }
 
-    const apiKey = await getConfiguredApiKey()
-    if (!apiKey) {
+    const config = await getAIConfig()
+    if (!config?.apiKey) {
       message.error('请先在全局设置中配置 API Key')
       return
     }
 
-    if (!isGeminiReady()) {
-      await initGemini(apiKey)
+    if (!isAIReady()) {
+      if (config.provider !== getCurrentProviderType()) {
+        setProvider(config.provider as any)
+      }
+      await initAI(config.apiKey, config.model)
     }
 
     setIsGeneratingTitle(true)
@@ -147,15 +157,18 @@ function Home() {
     }
 
     // 检查 AI API
-    const apiKey = await getConfiguredApiKey()
-    if (!apiKey) {
+    const config = await getAIConfig()
+    if (!config?.apiKey) {
       message.error('请先在全局设置中配置 API Key')
       navigate('/settings')
       return
     }
 
-    if (!isGeminiReady()) {
-      await initGemini(apiKey)
+    if (!isAIReady()) {
+      if (config.provider !== getCurrentProviderType()) {
+        setProvider(config.provider as any)
+      }
+      await initAI(config.apiKey, config.model)
     }
 
     setStep('generating')

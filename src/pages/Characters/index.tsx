@@ -24,9 +24,9 @@ import {
   SyncOutlined
 } from '@ant-design/icons'
 import { useProjectStore } from '../../stores/project'
-import { generateCharacter, isGeminiReady, initGemini } from '../../services/gemini'
+import { generateCharacter, isAIReady, initAI, setProvider, getCurrentProviderType } from '../../services/ai'
 import { analyzeAllChapterAppearances } from '../../services/character-utils'
-import { getConfiguredApiKey } from '../../utils'
+import { getAIProviderConfig } from '../../utils'
 import type { Character } from '../../types'
 
 const { TextArea } = Input
@@ -72,9 +72,12 @@ function Characters() {
 
   useEffect(() => {
     const initApi = async () => {
-      const apiKey = await getConfiguredApiKey()
-      if (apiKey) {
-        await initGemini(apiKey)
+      const config = await getAIProviderConfig()
+      if (config?.apiKey) {
+        if (config.provider && config.provider !== getCurrentProviderType()) {
+          setProvider(config.provider as any)
+        }
+        await initAI(config.apiKey, config.model)
       }
     }
     initApi()
@@ -133,7 +136,7 @@ function Characters() {
       return
     }
 
-    if (!isGeminiReady()) {
+    if (!isAIReady()) {
       message.warning('请先在设置中配置 Gemini API Key')
       return
     }

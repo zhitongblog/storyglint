@@ -32,9 +32,9 @@ import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { useProjectStore } from '../../stores/project'
 import { generateVolumeChapters, generateChaptersOneByOne } from '../../services/auto-create'
-import { isGeminiReady, initGemini } from '../../services/gemini'
+import { isAIReady, initAI, setProvider, getCurrentProviderType } from '../../services/ai'
 import { extractAllVolumeKeyPoints } from '../../services/outline-optimizer'
-import { getConfiguredApiKey } from '../../utils'
+import { getConfiguredApiKey, getAIProviderConfig } from '../../utils'
 import type { Chapter } from '../../types'
 
 const { TextArea } = Input
@@ -139,8 +139,8 @@ function Outline() {
       return
     }
 
-    if (!isGeminiReady()) {
-      message.warning('请先在全局设置中配置 Gemini API Key')
+    if (!isAIReady()) {
+      message.warning('请先在全局设置中配置 AI API Key')
       return
     }
 
@@ -217,9 +217,13 @@ function Outline() {
 
   useEffect(() => {
     const initApi = async () => {
-      const apiKey = await getConfiguredApiKey()
-      if (apiKey) {
-        await initGemini(apiKey)
+      const config = await getAIProviderConfig()
+      if (config?.apiKey) {
+        // 切换到用户配置的提供商
+        if (config.provider && config.provider !== getCurrentProviderType()) {
+          setProvider(config.provider as any)
+        }
+        await initAI(config.apiKey, config.model)
       }
     }
     initApi()
@@ -232,8 +236,8 @@ function Outline() {
     const volume = volumes.find(v => v.id === volumeId)
     if (!volume) return
 
-    if (!isGeminiReady()) {
-      message.warning('请先在全局设置中配置 Gemini API Key')
+    if (!isAIReady()) {
+      message.warning('请先在全局设置中配置 AI API Key')
       return
     }
 

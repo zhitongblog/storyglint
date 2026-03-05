@@ -4,8 +4,8 @@ import { Card, Table, Tag, Spin, Button, message, Progress, Tooltip, Modal } fro
 import { RobotOutlined, SyncOutlined, ReloadOutlined, TeamOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useProjectStore } from '../../stores/project'
-import { generateSummary, isGeminiReady, initGemini, analyzeAllChaptersForArchive } from '../../services/gemini'
-import { getConfiguredApiKey } from '../../utils'
+import { generateSummary, isAIReady, initAI, setProvider, getCurrentProviderType, analyzeAllChaptersForArchive } from '../../services/ai'
+import { getAIProviderConfig } from '../../utils'
 import type { Character, CharacterRelation } from '../../types'
 
 const roleLabels: Record<string, { text: string; color: string }> = {
@@ -38,9 +38,12 @@ function Archive() {
 
   useEffect(() => {
     const initApi = async () => {
-      const apiKey = await getConfiguredApiKey()
-      if (apiKey) {
-        await initGemini(apiKey)
+      const config = await getAIProviderConfig()
+      if (config?.apiKey) {
+        if (config.provider && config.provider !== getCurrentProviderType()) {
+          setProvider(config.provider as any)
+        }
+        await initAI(config.apiKey, config.model)
       }
     }
     initApi()
@@ -56,7 +59,7 @@ function Archive() {
   const handleUpdateCharacterArchive = async () => {
     if (!currentProject || !projectId) return
 
-    if (!isGeminiReady()) {
+    if (!isAIReady()) {
       message.warning('请先在设置中配置 Gemini API Key')
       return
     }
@@ -115,7 +118,7 @@ function Archive() {
   const handleGenerateSummary = async () => {
     if (!currentProject || !projectId) return
 
-    if (!isGeminiReady()) {
+    if (!isAIReady()) {
       message.warning('请先在设置中配置 Gemini API Key')
       return
     }

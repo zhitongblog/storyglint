@@ -4,7 +4,7 @@ import { Card, Input, Button, Spin, message, Select, Checkbox, Space, Divider } 
 import { PictureOutlined, DownloadOutlined, RobotOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import { useProjectStore } from '../../stores/project'
 import { isGeminiReady, initGemini, generateCoverImage, getCurrentModelName } from '../../services/gemini'
-import { getConfiguredApiKey } from '../../utils'
+import { getGeminiApiKey } from '../../utils'
 
 // 扩展的风格选项
 const styleOptions = [
@@ -261,10 +261,10 @@ function Cover() {
     }
   }, [authorName, projectId, currentProject, updateProject])
 
-  // 初始化 Gemini
+  // 初始化 Gemini（封面生成只支持 Gemini）
   useEffect(() => {
     const initApi = async () => {
-      const apiKey = await getConfiguredApiKey()
+      const apiKey = await getGeminiApiKey()
       if (apiKey) {
         await initGemini(apiKey)
       }

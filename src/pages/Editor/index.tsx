@@ -37,7 +37,7 @@ import RichEditor from '../../components/RichEditor'
 import ReadingMode from '../../components/ReadingMode'
 import { useProjectStore } from '../../stores/project'
 import { useEditorStore } from '../../stores/editor'
-import { isGeminiReady, initGemini, analyzeAllChaptersForArchive, analyzeChapterForDeaths } from '../../services/gemini'
+import { isAIReady, initAI, setProvider, getCurrentProviderType, analyzeAllChaptersForArchive, analyzeChapterForDeaths } from '../../services/ai'
 import {
   quickAnalyzeDeaths,
   detectDeceasedInContent,
@@ -45,7 +45,7 @@ import {
   buildDeathConfirmationPrompt,
   detectCharacterAppearances
 } from '../../services/character-utils'
-import { getConfiguredApiKey } from '../../utils'
+import { getAIProviderConfig } from '../../utils'
 import {
   writeChapterStrict,
   autoWriteAll,
@@ -141,12 +141,16 @@ function Editor() {
     }
   }, [currentChapter, setContent, setModified])
 
-  // 初始化 Gemini
+  // 初始化 AI 服务
   useEffect(() => {
     const initApi = async () => {
-      const apiKey = await getConfiguredApiKey()
-      if (apiKey) {
-        await initGemini(apiKey)
+      const config = await getAIProviderConfig()
+      if (config?.apiKey) {
+        // 切换到用户配置的提供商
+        if (config.provider && config.provider !== getCurrentProviderType()) {
+          setProvider(config.provider as any)
+        }
+        await initAI(config.apiKey, config.model)
       }
     }
     initApi()
@@ -574,8 +578,8 @@ function Editor() {
 
   // 打开写作约束输入框
   const handleOpenWriteModal = () => {
-    if (!isGeminiReady()) {
-      message.warning('请先在全局设置中配置 Gemini API Key')
+    if (!isAIReady()) {
+      message.warning('请先在全局设置中配置 AI API Key')
       return
     }
 
@@ -590,8 +594,8 @@ function Editor() {
 
   // AI 写作当前章节
   const handleAiWriteChapter = async (constraints?: string) => {
-    if (!isGeminiReady()) {
-      message.warning('请先在全局设置中配置 Gemini API Key')
+    if (!isAIReady()) {
+      message.warning('请先在全局设置中配置 AI API Key')
       return
     }
 
@@ -669,8 +673,8 @@ function Editor() {
 
   // 全自动写作 - 自动从第一个未写章节开始
   const handleStartAutoWrite = async () => {
-    if (!isGeminiReady()) {
-      message.warning('请先在全局设置中配置 Gemini API Key')
+    if (!isAIReady()) {
+      message.warning('请先在全局设置中配置 AI API Key')
       return
     }
 

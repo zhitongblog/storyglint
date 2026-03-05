@@ -140,3 +140,51 @@ export async function getConfiguredApiKey(): Promise<string | null> {
   const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
   return oldKey || null
 }
+
+/**
+ * 获取 Gemini API Key（用于封面生成等 Gemini 专属功能）
+ * 无论当前选择哪个提供商，都返回 Gemini 的 API Key
+ */
+export async function getGeminiApiKey(): Promise<string | null> {
+  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
+
+  if (configs?.gemini?.apiKey) {
+    return configs.gemini.apiKey
+  }
+  // 向后兼容：尝试旧的 geminiApiKey
+  const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
+  return oldKey || null
+}
+
+/**
+ * 获取当前 AI 提供商的完整配置
+ * 返回提供商类型、API Key 和模型名称
+ */
+export async function getAIProviderConfig(): Promise<{
+  provider: string
+  apiKey: string
+  model: string
+} | null> {
+  const provider = await window.electron.settings.get('aiProvider') as string | null
+  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
+
+  if (configs && provider && configs[provider]?.apiKey) {
+    return {
+      provider,
+      apiKey: configs[provider].apiKey,
+      model: configs[provider].model || ''
+    }
+  }
+
+  // 向后兼容：尝试旧的 geminiApiKey
+  const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
+  if (oldKey) {
+    return {
+      provider: 'gemini',
+      apiKey: oldKey,
+      model: ''
+    }
+  }
+
+  return null
+}
