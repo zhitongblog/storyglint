@@ -947,15 +947,15 @@ export class DatabaseService {
         now
       )
 
-      // 3. 导入卷
+      // 3. 导入卷（包含所有字段）
       if (data.volumes && Array.isArray(data.volumes)) {
         for (const volume of data.volumes) {
           const volumeId = generateNewIds ? uuidv4() : volume.id
           idMap.volumes.set(volume.id, volumeId)
 
           const volumeStmt = this.db!.prepare(`
-            INSERT INTO volumes (id, project_id, title, summary, sort_order, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO volumes (id, project_id, title, summary, sort_order, key_points, brief_chapters, main_plot, key_events, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `)
 
           volumeStmt.run(
@@ -964,6 +964,10 @@ export class DatabaseService {
             volume.title || '第一卷',
             volume.summary || '',
             volume.order || 0,
+            JSON.stringify(volume.keyPoints || []),
+            JSON.stringify(volume.briefChapters || []),
+            volume.mainPlot || '',
+            JSON.stringify(volume.keyEvents || []),
             volume.createdAt || now,
             now
           )
