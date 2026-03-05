@@ -116,6 +116,14 @@ export interface ElectronAPI {
       body?: string
     }) => Promise<{ ok: boolean; status: number; data: any; error?: string }>
   }
+
+  // 数据恢复
+  recovery: {
+    selectDatabase: () => Promise<{ success: boolean; canceled?: boolean; filePath?: string }>
+    readDatabase: (dbPath: string) => Promise<{ success: boolean; projects?: any[]; error?: string }>
+    importProject: (dbPath: string, projectId: string) => Promise<{ success: boolean; newProjectId?: string; error?: string }>
+    getUserDataPath: () => Promise<string>
+  }
 }
 
 // 暴露 API 到渲染进程
