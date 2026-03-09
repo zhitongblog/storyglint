@@ -10,45 +10,33 @@ import type { Character } from '../../../types'
 
 // Gemini 模型配置
 const GEMINI_MODELS: Record<string, ModelInfo> = {
-  'gemini-3.1-flash-lite-preview': {
-    name: 'Gemini 3.1 Flash-Lite (预览版)',
-    description: '最快最省钱，比2.5 Flash快2.5倍，有免费额度，推荐首选',
-    contextWindow: 32000,
+  'gemini-2.0-flash': {
+    name: 'Gemini 2.0 Flash',
+    description: '最新快速模型，性能优秀，推荐首选',
+    contextWindow: 1048576,
     recommended: true
   },
-  'gemini-3.1-pro-preview': {
-    name: 'Gemini 3.1 Pro (预览版)',
-    description: '最强推理能力，100万token上下文，适合复杂任务',
-    contextWindow: 1048576,
-    recommended: false
-  },
-  'gemini-3-flash-preview': {
-    name: 'Gemini 3 Flash (预览版)',
-    description: '速度快，配额高，编程能力强',
-    contextWindow: 2097152,
-    recommended: false
-  },
-  'gemini-2.0-flash-exp': {
-    name: 'Gemini 2.0 Flash (实验版)',
-    description: '快速模型，适合大纲生成',
+  'gemini-2.0-flash-lite': {
+    name: 'Gemini 2.0 Flash-Lite',
+    description: '轻量快速版，适合简单任务',
     contextWindow: 1048576,
     recommended: false
   },
   'gemini-1.5-pro': {
     name: 'Gemini 1.5 Pro',
-    description: '稳定版，高质量输出',
+    description: '高质量稳定版，适合复杂任务',
     contextWindow: 2097152,
     recommended: false
   },
   'gemini-1.5-flash': {
     name: 'Gemini 1.5 Flash',
-    description: '快速版，性价比高',
+    description: '快速稳定版，性价比高',
     contextWindow: 1048576,
     recommended: false
   }
 }
 
-const DEFAULT_MODEL = 'gemini-3.1-flash-lite-preview'
+const DEFAULT_MODEL = 'gemini-2.0-flash'
 
 export class GeminiProvider implements AIProvider {
   readonly type = 'gemini' as const
@@ -283,7 +271,7 @@ export class GeminiProvider implements AIProvider {
       throw new Error('Gemini API 未初始化，请先在设置中配置 API Key')
     }
 
-    const IMAGE_MODEL = 'gemini-3.1-flash-image-preview'
+    const IMAGE_MODEL = 'gemini-2.0-flash-exp'
 
     // 扩展的风格描述
     const styleDescriptions: Record<string, string> = {
