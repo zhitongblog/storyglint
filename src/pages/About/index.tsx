@@ -13,7 +13,7 @@ import weipayImage from '../../../demo/weipay.jpg'
 const { Title, Text, Paragraph, Link } = Typography
 
 // 从 package.json 获取版本号
-const APP_VERSION = '1.0.45'
+const APP_VERSION = '1.0.46'
 
 function About() {
   const handleCopyEmail = () => {
