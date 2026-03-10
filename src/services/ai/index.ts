@@ -3,8 +3,8 @@
  * 统一管理所有 AI 提供商，提供统一的接口
  */
 
-import type { AIProvider, ProviderType, QuotaInfo, ModelInfo, ProviderConfig } from './types'
-import { PROVIDER_INFO, PROVIDERS_BY_REGION } from './types'
+import type { AIProvider, ProviderType, QuotaInfo, ModelInfo, ProviderConfig, LegacyProviderConfig } from './types'
+import { PROVIDER_INFO, PROVIDERS_BY_REGION, isNewConfigFormat, migrateToNewConfig, getActiveApiKey } from './types'
 import type { Character } from '../../types'
 import { geminiProvider, GeminiProvider, GEMINI_MODELS } from './providers/gemini'
 import { openaiProvider, OPENAI_MODELS } from './providers/openai'
@@ -75,6 +75,75 @@ export function setProvider(type: ProviderType): void {
 }
 
 /**
+ * 检查错误是否为配额/限流错误
+ */
+export function isQuotaError(error: any): boolean {
+  const errorMsg = error?.message || String(error)
+  return (
+    errorMsg.includes('429') ||
+    errorMsg.includes('quota') ||
+    errorMsg.includes('rate limit') ||
+    errorMsg.includes('RESOURCE_EXHAUSTED') ||
+    errorMsg.includes('配额已用尽') ||
+    errorMsg.includes('rate_limit_exceeded') ||
+    errorMsg.includes('insufficient_quota')
+  )
+}
+
+/**
+ * 切换到下一个 API 密钥
+ * @returns true 如果成功切换到下一个密钥，false 如果没有更多密钥
+ */
+export async function switchToNextKey(): Promise<boolean> {
+  try {
+    const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, ProviderConfig | LegacyProviderConfig> | null
+
+    if (!configs || !configs[currentProviderType]) {
+      console.log('[AI] 没有找到提供商配置')
+      return false
+    }
+
+    const config = configs[currentProviderType]
+
+    // 如果是旧版配置格式，无法切换
+    if (!isNewConfigFormat(config)) {
+      console.log('[AI] 旧版配置格式，无法切换密钥')
+      return false
+    }
+
+    // 检查是否还有下一个密钥
+    if (config.activeKeyIndex >= config.apiKeys.length - 1) {
+      console.log('[AI] 没有更多可用密钥')
+      return false
+    }
+
+    // 切换到下一个密钥
+    const newIndex = config.activeKeyIndex + 1
+    const newKey = config.apiKeys[newIndex]
+
+    // 更新配置
+    const newConfigs = {
+      ...configs,
+      [currentProviderType]: {
+        ...config,
+        activeKeyIndex: newIndex
+      }
+    }
+
+    await window.electron.settings.set('aiProviderConfigs', newConfigs)
+
+    // 重新初始化 AI
+    await initAI(newKey, config.model)
+
+    console.log(`[AI] 已切换到密钥 ${newIndex + 1}/${config.apiKeys.length}`)
+    return true
+  } catch (error) {
+    console.error('[AI] 切换密钥失败:', error)
+    return false
+  }
+}
+
+/**
  * 初始化 AI（统一接口，保持向后兼容）
  */
 export async function initAI(apiKey: string, modelName?: string): Promise<boolean> {
@@ -89,14 +158,28 @@ export function isAIReady(): boolean {
 }
 
 /**
- * 生成文本
+ * 生成文本（支持自动切换密钥）
  */
 export async function generateText(
   prompt: string,
   retries?: number,
   timeout?: number
 ): Promise<string> {
-  return currentProvider.generateText(prompt, retries, timeout)
+  while (true) {
+    try {
+      return await currentProvider.generateText(prompt, retries, timeout)
+    } catch (error: any) {
+      if (isQuotaError(error)) {
+        const switched = await switchToNextKey()
+        if (switched) {
+          console.log('[AI] 配额用尽，已自动切换到下一个密钥，重新尝试...')
+          continue  // 用新密钥重试
+        }
+      }
+      // 无法切换或非配额错误，抛出原错误
+      throw error
+    }
+  }
 }
 
 /**
@@ -604,5 +687,5 @@ ${genres.join('、') || '未指定'}
 }
 
 // 导出类型
-export type { AIProvider, ProviderType, QuotaInfo, ModelInfo, ProviderConfig }
-export { PROVIDER_INFO, PROVIDERS_BY_REGION }
+export type { AIProvider, ProviderType, QuotaInfo, ModelInfo, ProviderConfig, LegacyProviderConfig }
+export { PROVIDER_INFO, PROVIDERS_BY_REGION, isNewConfigFormat, migrateToNewConfig, getActiveApiKey }

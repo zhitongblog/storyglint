@@ -16,7 +16,9 @@ import {
   ExclamationCircleOutlined,
   GoogleOutlined,
   BgColorsOutlined,
-  RobotOutlined
+  RobotOutlined,
+  PlusOutlined,
+  DeleteOutlined
 } from '@ant-design/icons'
 import {
   initAI,
@@ -28,7 +30,8 @@ import {
   getProvidersByRegion,
   PROVIDER_INFO
 } from '../../services/ai'
-import type { QuotaInfo, ProviderType } from '../../services/ai'
+import type { QuotaInfo, ProviderType, ProviderConfig, LegacyProviderConfig } from '../../services/ai'
+import { isNewConfigFormat, migrateToNewConfig } from '../../services/ai/types'
 import type { ServerUser } from '../../types'
 import { ErrorDisplay, parseError, type ErrorInfo } from '../../components/ErrorDisplay'
 
@@ -83,9 +86,10 @@ function GlobalSettings() {
   // AI 提供商配置
   const [selectedProvider, setSelectedProvider] = useState<ProviderType>('gemini')
   const [regionFilter, setRegionFilter] = useState<'all' | 'global' | 'china'>('all')
-  const [providerConfigs, setProviderConfigs] = useState<Record<string, { apiKey: string; model: string }>>({})
-  const [currentApiKey, setCurrentApiKey] = useState('')
-  const [isKeyModified, setIsKeyModified] = useState(false)
+  const [providerConfigs, setProviderConfigs] = useState<Record<string, ProviderConfig | LegacyProviderConfig>>({})
+  const [currentApiKeys, setCurrentApiKeys] = useState<string[]>([])  // 多密钥列表
+  const [activeKeyIndex, setActiveKeyIndex] = useState(0)  // 当前使用的密钥索引
+  const [newApiKey, setNewApiKey] = useState('')  // 新输入的密钥
   const [aiConfigured, setAiConfigured] = useState(false)
 
   // 代理配置
@@ -144,39 +148,57 @@ function GlobalSettings() {
       try {
         // 加载 AI 提供商配置
         const savedProvider = await window.electron.settings.get('aiProvider')
-        const savedProviderConfigs = await window.electron.settings.get('aiProviderConfigs')
+        const savedProviderConfigs = await window.electron.settings.get('aiProviderConfigs') as Record<string, ProviderConfig | LegacyProviderConfig> | null
 
         console.log('[GlobalSettings] 加载配置:', {
           provider: savedProvider,
           hasConfigs: !!savedProviderConfigs,
-          // 只显示密钥是否存在，不显示实际值
           configuredProviders: savedProviderConfigs ? Object.keys(savedProviderConfigs) : []
         })
 
-        if (savedProviderConfigs) {
-          setProviderConfigs(savedProviderConfigs as Record<string, { apiKey: string; model: string }>)
+        // 处理配置格式迁移
+        let configs = savedProviderConfigs || {}
+        let needsMigration = false
+
+        // 检查并迁移旧格式配置
+        for (const provider of Object.keys(configs)) {
+          if (!isNewConfigFormat(configs[provider])) {
+            console.log(`[GlobalSettings] 迁移 ${provider} 到新配置格式`)
+            configs[provider] = migrateToNewConfig(configs[provider] as LegacyProviderConfig)
+            needsMigration = true
+          }
         }
+
+        // 如果有迁移，保存新格式
+        if (needsMigration) {
+          await window.electron.settings.set('aiProviderConfigs', configs)
+          console.log('[GlobalSettings] 配置格式迁移完成')
+        }
+
+        setProviderConfigs(configs)
 
         // 设置当前提供商
         if (savedProvider && savedProvider in PROVIDER_INFO) {
           setSelectedProvider(savedProvider as ProviderType)
           setProvider(savedProvider as ProviderType)
 
-          const config = (savedProviderConfigs as Record<string, { apiKey: string; model: string }>)?.[savedProvider as string]
-          if (config?.apiKey) {
-            // 检查加载的 API key 是否是遮蔽的（这表示之前的保存有问题）
-            if (config.apiKey.includes('••••')) {
+          const config = configs[savedProvider as string] as ProviderConfig | undefined
+          if (config && isNewConfigFormat(config) && config.apiKeys.length > 0) {
+            const activeKey = config.apiKeys[config.activeKeyIndex] || config.apiKeys[0]
+            // 检查加载的 API key 是否是遮蔽的
+            if (activeKey.includes('••••')) {
               console.error('[GlobalSettings] 错误：加载到了遮蔽的 API key！')
             } else {
-              console.log('[GlobalSettings] API key 加载成功（长度:', config.apiKey.length, '）')
+              console.log('[GlobalSettings] API keys 加载成功（数量:', config.apiKeys.length, '）')
             }
-            setCurrentApiKey(maskKey(config.apiKey))
+            setCurrentApiKeys(config.apiKeys)
+            setActiveKeyIndex(config.activeKeyIndex || 0)
             setAiConfigured(true)
             if (config.model) {
               setSelectedModel(config.model)
             }
             // 初始化 AI
-            await initAI(config.apiKey, config.model)
+            await initAI(activeKey, config.model)
             // 自动检查配额
             setTimeout(() => handleCheckQuota(), 500)
           }
@@ -185,11 +207,16 @@ function GlobalSettings() {
           const oldApiKey = await window.electron.settings.get('geminiApiKey')
           const oldModel = await window.electron.settings.get('geminiModel')
           if (oldApiKey) {
-            const newConfigs = {
-              gemini: { apiKey: oldApiKey as string, model: (oldModel as string) || 'gemini-3-flash-preview' }
+            const newConfigs: Record<string, ProviderConfig> = {
+              gemini: {
+                apiKeys: [oldApiKey as string],
+                activeKeyIndex: 0,
+                model: (oldModel as string) || 'gemini-3-flash-preview'
+              }
             }
             setProviderConfigs(newConfigs)
-            setCurrentApiKey(maskKey(oldApiKey as string))
+            setCurrentApiKeys([oldApiKey as string])
+            setActiveKeyIndex(0)
             setAiConfigured(true)
             if (oldModel) {
               setSelectedModel(oldModel as string)
@@ -275,15 +302,19 @@ function GlobalSettings() {
 
     // 加载该提供商的配置
     const config = providerConfigs[provider]
-    if (config?.apiKey) {
-      setCurrentApiKey(maskKey(config.apiKey))
+    if (config && isNewConfigFormat(config) && config.apiKeys.length > 0) {
+      const activeKey = config.apiKeys[config.activeKeyIndex] || config.apiKeys[0]
+      setCurrentApiKeys(config.apiKeys)
+      setActiveKeyIndex(config.activeKeyIndex || 0)
       setAiConfigured(true)
       setSelectedModel(config.model || Object.keys(currentProviderModels)[0] || '')
-      await initAI(config.apiKey, config.model)
+      await initAI(activeKey, config.model)
       // 自动检查配额
       handleCheckQuota()
     } else {
-      setCurrentApiKey('')
+      setCurrentApiKeys([])
+      setActiveKeyIndex(0)
+      setNewApiKey('')
       setAiConfigured(false)
       // 设置默认模型
       const models = getAllModels()[provider]
@@ -293,66 +324,134 @@ function GlobalSettings() {
 
     // 保存选择的提供商
     await window.electron.settings.set('aiProvider', provider)
-    setIsKeyModified(false)
   }
 
-  // 保存 API Key
-  const handleSaveApiKey = async () => {
-    // 如果密钥未修改且已配置，不需要保存
-    if (!isKeyModified && aiConfigured) {
-      return
-    }
+  // 添加新的 API Key
+  const handleAddApiKey = async () => {
+    const apiKeyToAdd = newApiKey.trim()
 
-    // 立即保存当前输入的密钥副本，避免异步操作期间 state 变化
-    const apiKeyToSave = currentApiKey.trim()
-
-    if (!apiKeyToSave) {
+    if (!apiKeyToAdd) {
       message.warning('请输入 API Key')
       return
     }
 
     // 安全检查：确保不会保存遮蔽的密钥
-    // 遮蔽字符 •（U+2022）不太可能出现在真实的 API 密钥中
-    if (apiKeyToSave.includes('••••')) {
+    if (apiKeyToAdd.includes('••••')) {
       console.warn('[GlobalSettings] 检测到遮蔽密钥，不保存')
       message.warning('请输入新的 API Key')
       return
     }
 
+    // 检查是否已存在相同的密钥
+    if (currentApiKeys.includes(apiKeyToAdd)) {
+      message.warning('该 API Key 已存在')
+      return
+    }
+
     try {
+      // 添加到密钥列表
+      const newApiKeys = [...currentApiKeys, apiKeyToAdd]
+      const newActiveIndex = currentApiKeys.length === 0 ? 0 : activeKeyIndex  // 如果是第一个密钥，设为活跃
+
       // 更新提供商配置
-      const newConfigs = {
-        ...providerConfigs,
+      const newConfigs: Record<string, ProviderConfig> = {
+        ...providerConfigs as Record<string, ProviderConfig>,
         [selectedProvider]: {
-          apiKey: apiKeyToSave,
+          apiKeys: newApiKeys,
+          activeKeyIndex: newActiveIndex,
           model: selectedModel
         }
       }
 
-      // 先保存到存储，确保持久化
-      // 重要：同时保存 aiProvider 和 aiProviderConfigs，确保加载时能正确识别
+      // 保存到存储
       await window.electron.settings.set('aiProvider', selectedProvider)
       await window.electron.settings.set('aiProviderConfigs', newConfigs)
-      // 再更新 React state
       setProviderConfigs(newConfigs)
+      setCurrentApiKeys(newApiKeys)
+      setActiveKeyIndex(newActiveIndex)
+      setNewApiKey('')
 
-      console.log('[GlobalSettings] API Key 已保存到存储, provider:', selectedProvider)
+      console.log('[GlobalSettings] API Key 已添加, provider:', selectedProvider, '总数:', newApiKeys.length)
 
-      // 初始化 AI
-      const success = await initAI(apiKeyToSave, selectedModel)
-      if (success) {
-        message.success(`${PROVIDER_INFO[selectedProvider].name} API Key 已保存并验证成功`)
-        setAiConfigured(true)
-        setIsKeyModified(false)
-        // 使用保存的副本进行遮蔽，确保一致性
-        setCurrentApiKey(maskKey(apiKeyToSave))
-        handleCheckQuota()
+      // 如果是第一个密钥，初始化 AI
+      if (currentApiKeys.length === 0) {
+        const success = await initAI(apiKeyToAdd, selectedModel)
+        if (success) {
+          message.success(`${PROVIDER_INFO[selectedProvider].name} API Key 已保存并验证成功`)
+          setAiConfigured(true)
+          handleCheckQuota()
+        } else {
+          message.warning('API Key 已保存，但验证失败，请检查是否正确')
+        }
       } else {
-        message.warning('API Key 已保存，但验证失败，请检查是否正确')
+        message.success('备用 API Key 已添加')
       }
     } catch (error: any) {
       message.error(`保存失败: ${error.message || String(error)}`)
     }
+  }
+
+  // 删除 API Key
+  const handleRemoveApiKey = async (index: number) => {
+    if (currentApiKeys.length <= 1) {
+      message.warning('至少需要保留一个 API Key')
+      return
+    }
+
+    const newApiKeys = currentApiKeys.filter((_, i) => i !== index)
+    let newActiveIndex = activeKeyIndex
+
+    // 如果删除的是当前活跃的密钥，切换到第一个
+    if (index === activeKeyIndex) {
+      newActiveIndex = 0
+    } else if (index < activeKeyIndex) {
+      // 如果删除的是活跃密钥之前的，索引减1
+      newActiveIndex = activeKeyIndex - 1
+    }
+
+    const newConfigs: Record<string, ProviderConfig> = {
+      ...providerConfigs as Record<string, ProviderConfig>,
+      [selectedProvider]: {
+        apiKeys: newApiKeys,
+        activeKeyIndex: newActiveIndex,
+        model: selectedModel
+      }
+    }
+
+    await window.electron.settings.set('aiProviderConfigs', newConfigs)
+    setProviderConfigs(newConfigs)
+    setCurrentApiKeys(newApiKeys)
+    setActiveKeyIndex(newActiveIndex)
+
+    // 如果删除的是当前活跃密钥，重新初始化
+    if (index === activeKeyIndex) {
+      await initAI(newApiKeys[newActiveIndex], selectedModel)
+    }
+
+    message.success('API Key 已删除')
+  }
+
+  // 设置活跃的 API Key
+  const handleSetActiveKey = async (index: number) => {
+    if (index === activeKeyIndex) return
+
+    const newConfigs: Record<string, ProviderConfig> = {
+      ...providerConfigs as Record<string, ProviderConfig>,
+      [selectedProvider]: {
+        apiKeys: currentApiKeys,
+        activeKeyIndex: index,
+        model: selectedModel
+      }
+    }
+
+    await window.electron.settings.set('aiProviderConfigs', newConfigs)
+    setProviderConfigs(newConfigs)
+    setActiveKeyIndex(index)
+
+    // 重新初始化 AI
+    await initAI(currentApiKeys[index], selectedModel)
+    message.success('已切换到新的 API Key')
+    handleCheckQuota()
   }
 
   // 检查配额
@@ -462,10 +561,12 @@ function GlobalSettings() {
       await switchModel(modelName)
 
       // 更新提供商配置中的模型
-      const newConfigs = {
-        ...providerConfigs,
+      const currentConfig = providerConfigs[selectedProvider]
+      const newConfigs: Record<string, ProviderConfig> = {
+        ...providerConfigs as Record<string, ProviderConfig>,
         [selectedProvider]: {
-          ...providerConfigs[selectedProvider],
+          apiKeys: isNewConfigFormat(currentConfig) ? currentConfig.apiKeys : currentApiKeys,
+          activeKeyIndex: isNewConfigFormat(currentConfig) ? currentConfig.activeKeyIndex : activeKeyIndex,
           model: modelName
         }
       }
@@ -933,32 +1034,87 @@ function GlobalSettings() {
             </div>
           </div>
 
-          {/* API Key 输入 */}
+          {/* API Key 列表 */}
           <div>
             <label className="block text-dark-text mb-2">
               <Space>
                 <KeyOutlined />
-                {PROVIDER_INFO[selectedProvider].name} API Key
+                {PROVIDER_INFO[selectedProvider].name} API Keys
+                {currentApiKeys.length > 1 && (
+                  <Tag color="blue">{currentApiKeys.length} 个密钥</Tag>
+                )}
               </Space>
             </label>
+
+            {/* 现有密钥列表 */}
+            {currentApiKeys.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {currentApiKeys.map((key, index) => (
+                  <div
+                    key={index}
+                    className={`
+                      flex items-center gap-2 p-2 rounded border
+                      ${index === activeKeyIndex
+                        ? 'border-green-500 bg-green-500/10'
+                        : 'border-dark-border bg-dark-hover'
+                      }
+                    `}
+                  >
+                    <Tag
+                      color={index === activeKeyIndex ? 'green' : 'default'}
+                      className="cursor-pointer"
+                      onClick={() => handleSetActiveKey(index)}
+                    >
+                      {index === activeKeyIndex ? '当前使用' : `备用 ${index}`}
+                    </Tag>
+                    <span className="flex-1 font-mono text-sm text-dark-muted">
+                      {maskKey(key)}
+                    </span>
+                    <Tooltip title={index === activeKeyIndex ? '点击切换为当前使用' : '设为当前使用'}>
+                      <Button
+                        size="small"
+                        type={index === activeKeyIndex ? 'primary' : 'default'}
+                        icon={<CheckCircleOutlined />}
+                        onClick={() => handleSetActiveKey(index)}
+                        disabled={index === activeKeyIndex}
+                      />
+                    </Tooltip>
+                    <Tooltip title="删除此密钥">
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleRemoveApiKey(index)}
+                        disabled={currentApiKeys.length <= 1}
+                      />
+                    </Tooltip>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 添加新密钥 */}
             <div className="flex gap-2">
               <Input.Password
                 placeholder={`输入 ${PROVIDER_INFO[selectedProvider].name} API Key`}
-                value={currentApiKey}
-                onChange={(e) => {
-                  setCurrentApiKey(e.target.value)
-                  setIsKeyModified(true)
-                }}
+                value={newApiKey}
+                onChange={(e) => setNewApiKey(e.target.value)}
                 className="flex-1"
               />
               <Button
                 type="primary"
-                icon={<SaveOutlined />}
-                onClick={handleSaveApiKey}
+                icon={currentApiKeys.length === 0 ? <SaveOutlined /> : <PlusOutlined />}
+                onClick={handleAddApiKey}
               >
-                保存并验证
+                {currentApiKeys.length === 0 ? '保存并验证' : '添加备用密钥'}
               </Button>
             </div>
+
+            {currentApiKeys.length > 0 && (
+              <div className="text-dark-muted text-xs mt-2">
+                提示：当前密钥配额用尽时，系统将自动切换到下一个备用密钥
+              </div>
+            )}
           </div>
 
           {/* 配额检查按钮 */}

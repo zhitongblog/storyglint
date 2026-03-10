@@ -69,15 +69,53 @@ export interface AIProvider {
   isReady(): boolean
 }
 
-// 提供商配置
+// 提供商配置（支持多密钥）
 export interface ProviderConfig {
+  apiKeys: string[]        // 多个密钥数组
+  activeKeyIndex: number   // 当前使用的密钥索引
+  model: string
+}
+
+// 旧版提供商配置（用于向后兼容）
+export interface LegacyProviderConfig {
   apiKey: string
   model: string
 }
 
 // 所有提供商配置
 export interface AIProviderConfigs {
-  [provider: string]: ProviderConfig
+  [provider: string]: ProviderConfig | LegacyProviderConfig
+}
+
+/**
+ * 检查是否为新版配置格式
+ */
+export function isNewConfigFormat(config: ProviderConfig | LegacyProviderConfig): config is ProviderConfig {
+  return 'apiKeys' in config && Array.isArray(config.apiKeys)
+}
+
+/**
+ * 将旧版配置转换为新版格式
+ */
+export function migrateToNewConfig(config: LegacyProviderConfig): ProviderConfig {
+  return {
+    apiKeys: config.apiKey ? [config.apiKey] : [],
+    activeKeyIndex: 0,
+    model: config.model
+  }
+}
+
+/**
+ * 获取当前活跃的 API Key
+ */
+export function getActiveApiKey(config: ProviderConfig | LegacyProviderConfig): string | null {
+  if (isNewConfigFormat(config)) {
+    if (config.apiKeys.length > 0 && config.activeKeyIndex < config.apiKeys.length) {
+      return config.apiKeys[config.activeKeyIndex]
+    }
+    return null
+  }
+  return config.apiKey || null
 }
 
 // 提供商信息常量

@@ -125,16 +125,44 @@ export function calculateReadingTime(wordCount: number): number {
   return Math.ceil(wordCount / 400)
 }
 
+// 定义配置接口（与 services/ai/types.ts 保持一致）
+interface ProviderConfigNew {
+  apiKeys: string[]
+  activeKeyIndex: number
+  model: string
+}
+
+interface ProviderConfigLegacy {
+  apiKey: string
+  model: string
+}
+
+type ProviderConfigAny = ProviderConfigNew | ProviderConfigLegacy
+
+function isNewFormat(config: ProviderConfigAny): config is ProviderConfigNew {
+  return 'apiKeys' in config && Array.isArray(config.apiKeys)
+}
+
 /**
  * 获取当前配置的 AI API Key
- * 优先从新的 aiProviderConfigs 读取，向后兼容旧的 geminiApiKey
+ * 支持新的多密钥格式，向后兼容旧格式
  */
 export async function getConfiguredApiKey(): Promise<string | null> {
   const provider = await window.electron.settings.get('aiProvider') as string | null
-  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
+  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, ProviderConfigAny> | null
 
-  if (configs && provider && configs[provider]?.apiKey) {
-    return configs[provider].apiKey
+  if (configs && provider && configs[provider]) {
+    const config = configs[provider]
+    // 新格式：多密钥
+    if (isNewFormat(config)) {
+      if (config.apiKeys.length > 0) {
+        const activeIndex = config.activeKeyIndex || 0
+        return config.apiKeys[activeIndex] || config.apiKeys[0]
+      }
+      return null
+    }
+    // 旧格式：单密钥
+    return config.apiKey || null
   }
   // 向后兼容：尝试旧的 geminiApiKey
   const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
@@ -146,10 +174,20 @@ export async function getConfiguredApiKey(): Promise<string | null> {
  * 无论当前选择哪个提供商，都返回 Gemini 的 API Key
  */
 export async function getGeminiApiKey(): Promise<string | null> {
-  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
+  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, ProviderConfigAny> | null
 
-  if (configs?.gemini?.apiKey) {
-    return configs.gemini.apiKey
+  if (configs?.gemini) {
+    const config = configs.gemini
+    // 新格式：多密钥
+    if (isNewFormat(config)) {
+      if (config.apiKeys.length > 0) {
+        const activeIndex = config.activeKeyIndex || 0
+        return config.apiKeys[activeIndex] || config.apiKeys[0]
+      }
+      return null
+    }
+    // 旧格式：单密钥
+    return config.apiKey || null
   }
   // 向后兼容：尝试旧的 geminiApiKey
   const oldKey = await window.electron.settings.get('geminiApiKey') as string | null
@@ -166,13 +204,29 @@ export async function getAIProviderConfig(): Promise<{
   model: string
 } | null> {
   const provider = await window.electron.settings.get('aiProvider') as string | null
-  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, { apiKey: string; model: string }> | null
+  const configs = await window.electron.settings.get('aiProviderConfigs') as Record<string, ProviderConfigAny> | null
 
-  if (configs && provider && configs[provider]?.apiKey) {
-    return {
-      provider,
-      apiKey: configs[provider].apiKey,
-      model: configs[provider].model || ''
+  if (configs && provider && configs[provider]) {
+    const config = configs[provider]
+    let apiKey: string | null = null
+
+    // 新格式：多密钥
+    if (isNewFormat(config)) {
+      if (config.apiKeys.length > 0) {
+        const activeIndex = config.activeKeyIndex || 0
+        apiKey = config.apiKeys[activeIndex] || config.apiKeys[0]
+      }
+    } else {
+      // 旧格式：单密钥
+      apiKey = config.apiKey || null
+    }
+
+    if (apiKey) {
+      return {
+        provider,
+        apiKey,
+        model: config.model || ''
+      }
     }
   }
 
